@@ -11,7 +11,10 @@
     "test:watch": "vitest --watch",
     "test:workers": "vitest --config vite.workers.config.ts",
     "test:workers:watch": "vitest --config vite.workers.config.ts --watch",
-    "lint": "tsc --noEmit"
+    "lint": "tsc --noEmit",
+    "migrate:local": "wrangler d1 migrations apply fancpa-db --local",
+    "migrate:alpha": "wrangler d1 migrations apply fancpa-db-alpha --remote --env preview",
+    "migrate:prod": "wrangler d1 migrations apply fancpa-db --remote --env production"
   },
   "dependencies": {
     "react": "^18.3.1",
