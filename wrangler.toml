@@ -1,0 +1,49 @@
+name = "fancpa-web"
+compatibility_date = "2024-01-01"
+pages_build_output_dir = "dist"
+
+# Non-PII vars for local dev. D1/R2 IDs are placeholders until scripts/setup-cloudflare.sh runs.
+[vars]
+ENVIRONMENT = "local"
+SITE_URL = "http://localhost:8788"
+
+# Local D1/R2 for `wrangler pages dev --local` (uses prod DB name/id after setup)
+[[d1_databases]]
+binding = "DB"
+database_name = "fancpa-db"
+database_id = "27016a38-1fa1-4982-be9c-5901a5cfcafe"
+
+[[r2_buckets]]
+binding = "R2_BUCKET"
+bucket_name = "fancpa-images"
+
+# Preview env = non-production branch deployments (e.g., alpha branch)
+[env.preview]
+[[env.preview.d1_databases]]
+binding = "DB"
+database_name = "fancpa-db-preview"
+database_id = "87488813-e045-4e50-8506-99fa4f25a625"
+
+[[env.preview.r2_buckets]]
+binding = "R2_BUCKET"
+bucket_name = "fancpa-images-preview"
+
+[env.preview.vars]
+ENVIRONMENT = "preview"
+# This URL is correct if 'alpha' is set as the custom preview branch
+SITE_URL = "https://alpha.fancpa-web.pages.dev"
+
+# Production env = main branch deployments
+[env.production]
+[[env.production.d1_databases]]
+binding = "DB"
+database_name = "fancpa-db"
+database_id = "27016a38-1fa1-4982-be9c-5901a5cfcafe"
+
+[[env.production.r2_buckets]]
+binding = "R2_BUCKET"
+bucket_name = "fancpa-images"
+
+[env.production.vars]
+ENVIRONMENT = "production"
+SITE_URL = "https://fancpa-web.pages.dev"
