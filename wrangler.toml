@@ -1,0 +1,16 @@
+name = "fancpa-web"
+compatibility_date = "2024-01-01"
+pages_build_output_dir = "dist"
+
+# Non-PII vars for local dev and Cloudflare Pages deployments.
+[vars]
+ENVIRONMENT = "local"
+SITE_URL = "http://localhost:8788"
+
+[env.preview.vars]
+ENVIRONMENT = "preview"
+SITE_URL = "https://preview.fancpa-web.pages.dev"
+
+[env.production.vars]
+ENVIRONMENT = "production"
+SITE_URL = "https://fancpa-web.pages.dev"

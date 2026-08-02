@@ -1,0 +1,13 @@
+FROM node:20
+
+WORKDIR /app
+
+COPY package*.json ./
+RUN npm install --no-audit --no-fund
+
+COPY . .
+RUN npm run build
+
+EXPOSE 8788
+
+CMD ["npx", "wrangler", "pages", "dev", "dist", "--local", "--ip", "0.0.0.0", "--port", "8788", "--compatibility-date=2024-01-01"]
