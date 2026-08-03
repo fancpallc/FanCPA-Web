@@ -3,7 +3,7 @@
 
 -- Page: home
 INSERT INTO pages (id, slug, title, meta_description, sort_order, is_published)
-VALUES ('page_home', 'home', 'Jane Doe — Designer & Developer', 'Portfolio of Jane Doe — branding, design, and development services', 0, 1)
+VALUES ('page_home', 'home', 'FanCPA — Professional Accounting & Tax Services', 'Comprehensive tax, bookkeeping, and advisory services for businesses and individuals.', 0, 1)
 ON CONFLICT(slug) DO UPDATE SET
   title=excluded.title,
   meta_description=excluded.meta_description,
@@ -12,66 +12,66 @@ ON CONFLICT(slug) DO UPDATE SET
 -- Sections for home page (ordered)
 -- Hero (0)
 INSERT INTO sections (id, page_id, type, heading, subheading, sort_order, config, is_visible)
-VALUES ('sec_hero', 'page_home', 'hero', 'Hi, I am Jane — Designer & Developer', 'Crafting brand identities and digital experiences that inspire', 0, '{"theme":"light","align":"left"}', 1)
+VALUES ('sec_hero', 'page_home', 'hero', 'Empowering Your Financial Success', 'Expert tax strategy, precise bookkeeping, and personalized financial guidance to help your business thrive.', 0, '{"theme":"light","align":"left"}', 1)
 ON CONFLICT(id) DO UPDATE SET heading=excluded.heading, subheading=excluded.subheading, sort_order=excluded.sort_order, config=excluded.config, updated_at=datetime('now');
 
 -- Services grid (1) — 6 cards
 INSERT INTO sections (id, page_id, type, heading, subheading, sort_order, config, is_visible)
-VALUES ('sec_services', 'page_home', 'cards-grid', 'Branding & More Services', 'What I can do for you', 1, '{"columns":3}', 1)
+VALUES ('sec_services', 'page_home', 'cards-grid', 'Our Services', 'Tailored solutions to manage your finances', 1, '{"columns":3}', 1)
 ON CONFLICT(id) DO UPDATE SET heading=excluded.heading, subheading=excluded.subheading, sort_order=excluded.sort_order, updated_at=datetime('now');
 
 -- About / Text block (2)
 INSERT INTO sections (id, page_id, type, heading, subheading, sort_order, config, is_visible)
-VALUES ('sec_about', 'page_home', 'text-block', 'About Me', 'Passion for design, 10 years experience', 2, '{"image_position":"left"}', 1)
+VALUES ('sec_about', 'page_home', 'text-block', 'About FanCPA', 'Years of experience in navigating complex financial landscapes.', 2, '{"image_position":"left"}', 1)
 ON CONFLICT(id) DO UPDATE SET heading=excluded.heading, subheading=excluded.subheading, sort_order=excluded.sort_order, updated_at=datetime('now');
 
 -- Testimonials (3)
 INSERT INTO sections (id, page_id, type, heading, subheading, sort_order, config, is_visible)
-VALUES ('sec_testimonials', 'page_home', 'testimonials', 'Happy Clients Say', '', 3, '{}', 1)
+VALUES ('sec_testimonials', 'page_home', 'testimonials', 'Trusted by Our Clients', '', 3, '{}', 1)
 ON CONFLICT(id) DO UPDATE SET heading=excluded.heading, sort_order=excluded.sort_order, updated_at=datetime('now');
 
 -- CTA Banner (4)
 INSERT INTO sections (id, page_id, type, heading, subheading, sort_order, config, is_visible)
-VALUES ('sec_cta', 'page_home', 'cta-banner', 'Ready to start your project?', 'Book a free 30-minute intro call — no pitch, just practical next steps.', 4, '{}', 1)
+VALUES ('sec_cta', 'page_home', 'cta-banner', 'Ready to simplify your finances?', 'Book a free 30-minute consultation to discuss your needs.', 4, '{}', 1)
 ON CONFLICT(id) DO UPDATE SET heading=excluded.heading, subheading=excluded.subheading, sort_order=excluded.sort_order, updated_at=datetime('now');
 
--- Image Gallery (5) — my work
+-- Image Gallery (5) — removed/renamed for business relevance
 INSERT INTO sections (id, page_id, type, heading, subheading, sort_order, config, is_visible)
-VALUES ('sec_gallery', 'page_home', 'image-gallery', 'My Work — Selected Projects', '', 5, '{"columns":3}', 1)
+VALUES ('sec_gallery', 'page_home', 'image-gallery', 'Our Workspace', '', 5, '{"columns":3}', 0)
 ON CONFLICT(id) DO UPDATE SET heading=excluded.heading, sort_order=excluded.sort_order, updated_at=datetime('now');
 
 -- Section Items
 
 -- Hero items (1)
 INSERT INTO section_items (id, section_id, title, body, image_url, link_url, link_text, sort_order, is_visible)
-VALUES ('item_hero_1', 'sec_hero', 'Welcome to My Portfolio', 'I help startups build memorable brands and intuitive digital products. Based in San Francisco, working globally.', 'https://images.unsplash.com/photo-1498050108023-c5249f4df085?w=1200&auto=format&fit=crop', '/#calendar', 'Book a free call', 0, 1)
+VALUES ('item_hero_1', 'sec_hero', 'Your Partner in Accounting', 'Professional financial services designed to save you time and maximize your returns. We handle the numbers, so you can focus on your business.', 'https://images.unsplash.com/photo-1554224155-8d04cb27cd6c?w=1200&auto=format&fit=crop', '/#calendar', 'Schedule a meeting', 0, 1)
 ON CONFLICT(id) DO UPDATE SET title=excluded.title, body=excluded.body, image_url=excluded.image_url, link_url=excluded.link_url, link_text=excluded.link_text, updated_at=datetime('now');
 
 -- Services — 6 cards (2 rows x 3 cols)
 INSERT INTO section_items (id, section_id, title, body, icon, link_url, link_text, sort_order, is_visible) VALUES
-('item_svc_1', 'sec_services', 'Brand Strategy', 'Define your brand voice, positioning, and story', '🎯', '/#calendar', 'Book a free call', 0, 1),
-('item_svc_2', 'sec_services', 'Logo Design', 'Memorable marks that stand the test of time', '✨', '/#calendar', 'Book a free call', 1, 1),
-('item_svc_3', 'sec_services', 'Web Design', 'Clean, responsive websites that convert', '💻', '/#calendar', 'Book a free call', 2, 1),
-('item_svc_4', 'sec_services', 'Illustration', 'Custom illustrations that tell your story', '🎨', '/#calendar', 'Book a free call', 3, 1),
-('item_svc_5', 'sec_services', 'Art Direction', 'Creative direction for campaigns and launches', '📸', '/#calendar', 'Book a free call', 4, 1),
-('item_svc_6', 'sec_services', 'Consulting', '1:1 sessions to level up your brand', '💡', '/#calendar', 'Book a free call', 5, 1)
+('item_svc_1', 'sec_services', 'Tax Preparation', 'Expert preparation for individuals and business filings', '📋', '/#calendar', 'Learn more', 0, 1),
+('item_svc_2', 'sec_services', 'Bookkeeping', 'Clean, organized financial records you can trust', '📈', '/#calendar', 'Learn more', 1, 1),
+('item_svc_3', 'sec_services', 'Payroll Services', 'Stress-free payroll management and compliance', '💳', '/#calendar', 'Learn more', 2, 1),
+('item_svc_4', 'sec_services', 'Financial Planning', 'Strategic advice for long-term growth', '📊', '/#calendar', 'Learn more', 3, 1),
+('item_svc_5', 'sec_services', 'CFO Services', 'High-level financial strategy on demand', '👔', '/#calendar', 'Learn more', 4, 1),
+('item_svc_6', 'sec_services', 'Business Consulting', 'Guidance to scale your business operations', '🚀', '/#calendar', 'Learn more', 5, 1)
 ON CONFLICT(id) DO UPDATE SET title=excluded.title, body=excluded.body, icon=excluded.icon, sort_order=excluded.sort_order, updated_at=datetime('now');
 
 -- About
 INSERT INTO section_items (id, section_id, title, body, image_url, author, sort_order, is_visible)
-VALUES ('item_about_1', 'sec_about', 'Jane Doe', 'I’m a brand designer and front-end developer with 10+ years helping startups from idea to Series B. My approach blends strategic thinking with hands-on craft — from research and moodboards to final pixels and code. Previously at Figma, Airbnb. Now independent, working with select clients globally.', 'https://images.unsplash.com/photo-1494790108377-be9c29b29330?w=400&auto=format&fit=crop', 'Senior Designer — 10 yrs — Figma, Airbnb, Independent', 0, 1)
+VALUES ('item_about_1', 'sec_about', 'The FanCPA Advantage', 'With over 15 years of experience, we provide more than just number-crunching. We act as an extension of your team, providing actionable financial insights to help you make informed decisions.', 'https://images.unsplash.com/photo-1560520653-9e0e4c89eb11?w=400&auto=format&fit=crop', 'FanCPA Team', 0, 1)
 ON CONFLICT(id) DO UPDATE SET title=excluded.title, body=excluded.body, image_url=excluded.image_url, author=excluded.author, updated_at=datetime('now');
 
 -- Testimonials
 INSERT INTO section_items (id, section_id, title, body, author, sort_order, is_visible) VALUES
-('item_test_1', 'sec_testimonials', 'Startup Founder', 'Jane transformed our brand. The new identity helped us raise our seed round — investors immediately got who we are.', 'John Smith — CEO, BaseAI', 0, 1),
-('item_test_2', 'sec_testimonials', 'Product Lead', 'Best collaboration ever. She shipped our entire design system in 3 weeks, with docs so good engineers loved it.', 'Alice Johnson — Product, Loom', 1, 1),
-('item_test_3', 'sec_testimonials', 'Marketing Director', 'Our site conversion +40% after her redesign. Clean, fast, accessible — and still feels like us.', 'Mike Chen — Marketing, Linear', 2, 1)
+('item_test_1', 'sec_testimonials', 'Small Business Owner', 'FanCPA has been a lifesaver. Tax season is no longer stressful, and their bookkeeping advice saved us thousands.', 'Alex R. — Founder', 0, 1),
+('item_test_2', 'sec_testimonials', 'Entrepreneur', 'Their CFO services were exactly what I needed to scale my operations. Strategic, professional, and reliable.', 'Sarah L. — CEO', 1, 1),
+('item_test_3', 'sec_testimonials', 'Professional', 'I’ve been with FanCPA for 5 years now. They make complex financial decisions simple and clear.', 'David K. — Consultant', 2, 1)
 ON CONFLICT(id) DO UPDATE SET title=excluded.title, body=excluded.body, author=excluded.author, sort_order=excluded.sort_order, updated_at=datetime('now');
 
 -- CTA
 INSERT INTO section_items (id, section_id, title, body, link_url, link_text, sort_order, is_visible)
-VALUES ('item_cta_1', 'sec_cta', NULL, NULL, '/#calendar', 'Book a free call', 0, 1)
+VALUES ('item_cta_1', 'sec_cta', NULL, NULL, '/#calendar', 'Schedule a meeting', 0, 1)
 ON CONFLICT(id) DO UPDATE SET title=excluded.title, body=excluded.body, link_url=excluded.link_url, link_text=excluded.link_text, updated_at=datetime('now');
 
 -- Gallery — 6 images
@@ -83,3 +83,4 @@ INSERT INTO section_items (id, section_id, title, body, image_url, sort_order, i
 ('item_gal_5', 'sec_gallery', 'Onboarding Illustrations', 'Custom set for SaaS', 'https://images.unsplash.com/photo-1516321318423-f06f85e504b3?w=600&auto=format&fit=crop', 4, 1),
 ('item_gal_6', 'sec_gallery', 'Brand Guidelines', '150-page guidebook', 'https://images.unsplash.com/photo-1586717791821-3f44a563fa4c?w=600&auto=format&fit=crop', 5, 1)
 ON CONFLICT(id) DO UPDATE SET title=excluded.title, body=excluded.body, image_url=excluded.image_url, sort_order=excluded.sort_order, updated_at=datetime('now');
+
