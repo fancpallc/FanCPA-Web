@@ -10,10 +10,10 @@ describe('TextBlock / About', () => {
         items={[
           {
             id: 'i1',
-            body: 'I am a designer with 10 years experience',
+            body: 'I am a finance expert with 10 years experience',
             image_url: '/img/photo.jpg',
-            title: 'Jane Doe',
-            author: 'Jane — Senior Designer',
+            title: 'FAN CPA LLC',
+            author: 'FAN CPA LLC — Financial Experts',
             sort_order: 0,
             is_visible: 1,
           } as any,
@@ -22,7 +22,7 @@ describe('TextBlock / About', () => {
     )
     expect(screen.getByText(/About Me/)).toBeInTheDocument()
     expect(screen.getByText(/My story/)).toBeInTheDocument()
-    expect(screen.getByText(/I am a designer/)).toBeInTheDocument()
+    expect(screen.getByText(/I am a finance/)).toBeInTheDocument()
     expect(document.querySelector('img')?.src).toContain('photo.jpg')
   })
 
@@ -31,3 +31,4 @@ describe('TextBlock / About', () => {
     expect(screen.getByRole('heading', { name: /about/i })).toBeInTheDocument()
   })
 })
+

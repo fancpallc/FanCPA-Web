@@ -58,7 +58,7 @@ export function Footer() {
         </div>
         <div className="border-t mt-10 pt-6 flex flex-col sm:flex-row justify-between gap-3 text-xs text-gray-500">
           <div>© {new Date().getFullYear()} {siteName}. All rights reserved.</div>
-          <div>Remote-first</div>
+          <div></div>
         </div>
       </div>
     </footer>

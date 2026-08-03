@@ -5,7 +5,7 @@ export interface NavProps {
   title?: string
 }
 
-export function Nav({ title = 'Portfolio' }: NavProps) {
+export function Nav({ title = 'FAN CPA LLC' }: NavProps) {
   const { data } = useContent('home')
   const visibleTypes = new Set((data?.sections || []).map((s: any) => s.type))
   const [menuOpen, setMenuOpen] = useState(false)
@@ -94,3 +94,4 @@ export function Nav({ title = 'Portfolio' }: NavProps) {
     </header>
   )
 }
+

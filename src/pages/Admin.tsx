@@ -320,7 +320,7 @@ export function Admin() {
                   <EditableText
                     value={content.page?.title || ''}
                     onSave={async (v) => { try { await content.updatePage({ title: v }) } catch (e: any) { setGlobalError(e?.message); throw e } }}
-                    placeholder="Jane Doe — Designer & Developer"
+                    placeholder="FAN CPA LLC — Financial Experts"
                     required
                     ariaLabel="Browser tab title"
                     displayClassName="text-sm"
