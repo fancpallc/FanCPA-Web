@@ -23,8 +23,9 @@ describe('BookingForm — first_name, last_name, email, phone, purpose + Turnsti
     expect(screen.getByLabelText(/last name/i)).toBeInTheDocument()
     expect(screen.getByLabelText(/email/i)).toBeInTheDocument()
     expect(screen.getByText(/purpose/i)).toBeInTheDocument()
-    // Turnstile widget present — should have site key or widget element
-    expect(document.querySelector('[data-sitekey]') || document.querySelector('iframe') || screen.getByText(/turnstile|verification|protected/i) || document.body).toBeTruthy()
+    // Turnstile widget mount point present (data-sitekey was removed in the refactor;
+    // explicit turnstile.render() supplies the sitekey, so assert the container by id)
+    expect(document.querySelector('#turnstile-widget')).toBeTruthy()
   })
 
   it('should validate required fields and email format', async () => {
