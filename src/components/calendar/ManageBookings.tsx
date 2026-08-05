@@ -36,7 +36,7 @@ export function ManageBookings() {
       setTurnstileToken('fake-token-for-test')
       return true
     }
-    const siteKey = (window as any)?.TURNSTILE_SITE_KEY || '0x4AAAAAAEFtPVYesU8mlFUf'
+    const siteKey = (window as any)?.TURNSTILE_SITE_KEY
     if (typeof window !== 'undefined' && (window as any).turnstile) {
       try {
         debug(`!!! MANAGE_TURNSTILE_RENDER siteKey=${siteKey}`)
