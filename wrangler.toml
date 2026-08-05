@@ -32,6 +32,7 @@ bucket_name = "fancpa-images-preview"
 ENVIRONMENT = "preview"
 # This URL is correct if 'alpha' is set as the custom preview branch
 SITE_URL = "https://alpha.fancpa-web.pages.dev"
+TURNSTILE_SITE_KEY = "0x4AAAAAAEFtPVYesU8mlFUf"
 
 # Production env = main branch deployments
 [env.production]
@@ -47,3 +48,4 @@ bucket_name = "fancpa-images"
 [env.production.vars]
 ENVIRONMENT = "production"
 SITE_URL = "https://fancpa-web.pages.dev"
+TURNSTILE_SITE_KEY = "0x4AAAAAAEFtPVYesU8mlFUf"
