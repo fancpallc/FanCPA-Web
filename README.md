@@ -62,6 +62,10 @@ docker compose run --rm tests
 4. Functions are auto-deployed from the `functions/` folder.
 5. Set environment variables in the Cloudflare dashboard (`ENVIRONMENT`, `SITE_URL`, etc.).
 
+## Slice 3 — Booking Meeting (core) ✅
+
+- **Email**: Resend `api.resend.com/emails` verified domain `bookings@yourdomain.com` (Env: `EMAIL_FROM`) — Includes Meet + cancel + purpose + dateTime ET. **Gmail API fallback** (`sendViaGmail`) via OAuth `GOOGLE_OAUTH_*` if Resend unavailable.
+
 ## API
 
 ### `GET /api/health`
