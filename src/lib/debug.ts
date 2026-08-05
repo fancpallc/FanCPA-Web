@@ -6,5 +6,4 @@
  * never reach a public page's console.
  */
 export function debug(message: string): void {
-  if (import.meta.env.DEV) console.log(message)
 }

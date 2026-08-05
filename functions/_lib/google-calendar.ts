@@ -240,10 +240,8 @@ export async function getFreeBusy(env: any): Promise<{ busyBlocks: BusyBlock[]; 
   const personalId = getPersonalCalendarId(env) || env?.PERSONAL_CALENDAR_ID || env?.PERSONAL
   const isStub = !saKeyRaw || env?.STUB === 'true' || env?.STUB_SLOTS === 'true' || env?.ENVIRONMENT === 'test' || env?.ENVIRONMENT === 'local'
 
-  console.log(`!!! FREEBUSY_START env=${env?.ENVIRONMENT} hasKey=${!!saKeyRaw} bookingId=${bookingId ? bookingId.slice(0, 8) + '...' : 'missing'} personalId=${personalId ? 'present' : 'missing'} isStub=${isStub}`)
 
   if (isStub) {
-    console.log(`!!! FREEBUSY_STUB reason=${!saKeyRaw ? 'GCAL key missing' : `STUB flag or env ${env?.ENVIRONMENT}`} env=${env?.ENVIRONMENT}`)
     return { busyBlocks: getStubBusyBlocks(), source: 'stub', error: !saKeyRaw ? 'GCAL_SERVICE_ACCOUNT_KEY missing (checked aliases)' : undefined }
   }
 
@@ -320,13 +318,11 @@ export async function getFreeBusy(env: any): Promise<{ busyBlocks: BusyBlock[]; 
 
       const tokenJson = (await tokenRes.json()) as any
       const accessToken = tokenJson.access_token
-      console.log(`!!! FREEBUSY_TOKEN_EXCHANGE_OK hasToken=${!!accessToken}`)
       if (!accessToken) throw new Error('No access token')
 
       // FreeBusy query
       const timeMin = new Date().toISOString()
       const timeMax = new Date(Date.now() + 14 * 24 * 3600 * 1000).toISOString() // 2 weeks
-      console.log(`!!! FREEBUSY_QUERY_START timeMin=${timeMin} timeMax=${timeMax}`)
 
       const calendarIds = [bookingId, personalId].filter((x): x is string => Boolean(x))
       const fbRes = await fetch('https://www.googleapis.com/calendar/v3/freeBusy', {
@@ -342,11 +338,9 @@ export async function getFreeBusy(env: any): Promise<{ busyBlocks: BusyBlock[]; 
         }),
       })
 
-      console.log(`!!! FREEBUSY_QUERY_RESPONSE status=${fbRes.status} ok=${fbRes.ok}`)
 
       if (!fbRes.ok) {
         const txt = await fbRes.text().catch(() => '')
-        console.log(`!!! FREEBUSY_FAILED status=${fbRes.status} body=${txt.slice(0, 300)}`)
         throw new Error(`FreeBusy failed ${fbRes.status} ${txt.slice(0, 200)}`)
       }
 
@@ -356,16 +350,13 @@ export async function getFreeBusy(env: any): Promise<{ busyBlocks: BusyBlock[]; 
         const busy = fbJson.calendars[calId].busy || []
         busy.forEach((b: any) => busyBlocks.push({ start: b.start, end: b.end }))
       }
-      console.log(`!!! FREEBUSY_SUCCESS busyBlocks=${busyBlocks.length} calendars=${Object.keys(fbJson.calendars || {}).join(',')}`)
 
       return { busyBlocks, source: 'live' }
     } catch (cryptoErr: any) {
-      console.log(`!!! FREEBUSY_CRYPTO_ERROR ${cryptoErr?.message}`)
       // Fallback to stub if crypto or fetch fails (local dev, test)
       return { busyBlocks: getStubBusyBlocks(), source: 'stub', error: cryptoErr?.message }
     }
   } catch (e: any) {
-    console.log(`!!! FREEBUSY_OUTER_ERROR ${e?.message}`)
     return { busyBlocks: getStubBusyBlocks(), source: 'stub', error: e?.message }
   }
 }
@@ -399,11 +390,9 @@ export async function createBookingEvent(env: any, params: CreateEventParams): P
   // Clear stub condition: only when explicitly told or missing key + local/test, or missing bookingId
   const isStub = (!saKeyRaw && isLocalOrTest) || isStubFlag || envName === 'test' || envName === 'local'
 
-  console.log(`!!! GCAL_CREATE_EVENT_START env=${envName} hasKey=${!!saKeyRaw} bookingId=${bookingId ? bookingId.slice(0, 8) + '...' : 'missing'} isStub=${isStub} isLocalOrTest=${isLocalOrTest} cancelToken=${params.cancelToken} slot=${params.slot.start} hasOAuth=${hasOAuthConfig(env)}`)
 
   // Try OAuth first if configured — works for personal Gmail group calendars where SA fails Meet creation
   if (hasOAuthConfig(env)) {
-    console.log('!!! GCAL_TRY_OAUTH_FIRST has OAuth config, attempting OAuth user flow for real Meet')
     const oauthResult = await createBookingEventViaOAuth(env, {
       firstName: params.firstName,
       lastName: params.lastName,
@@ -414,10 +403,8 @@ export async function createBookingEvent(env: any, params: CreateEventParams): P
       cancelToken: params.cancelToken,
       siteUrl,
     })
-    console.log(`!!! GCAL_OAUTH_RESULT source=${oauthResult.source} eventId=${oauthResult.calendarEventId} meetLink=${oauthResult.meetLink} error=${oauthResult.error || 'none'}`)
     if (oauthResult.source === 'live-oauth' && oauthResult.calendarEventId && !oauthResult.calendarEventId.startsWith('stub-')) {
       // OAuth succeeded with real event — return as live (even if bare without Meet, it's real Google 200)
-      console.log('!!! GCAL_OAUTH_SUCCESS returning live event from OAuth')
       return {
         calendarEventId: oauthResult.calendarEventId,
         meetLink: oauthResult.meetLink || `https://meet.google.com/fake-oauth-no-meet-${params.cancelToken.slice(0, 4)}`,
@@ -425,12 +412,10 @@ export async function createBookingEvent(env: any, params: CreateEventParams): P
         error: oauthResult.error,
       }
     } else {
-      console.log(`!!! GCAL_OAUTH_FALLBACK_TO_SA reason=${oauthResult.error} — trying SA flow`)
     }
   }
 
   if (!bookingId) {
-    console.log(`!!! GCAL_CREATE_FAIL_NO_BOOKING_ID env=${envName}`)
     // Missing booking calendar ID — this is critical, should NOT silently fake in alpha/prod
     if (!isLocalOrTest && !isStubFlag) {
       return {
@@ -449,7 +434,6 @@ export async function createBookingEvent(env: any, params: CreateEventParams): P
   }
 
   if (isStub || !saKeyRaw) {
-    console.log(`!!! GCAL_CREATE_STUB isStub=${isStub} hasKey=${!!saKeyRaw} reason=${!saKeyRaw ? 'key missing' : isStubFlag ? 'STUB flag' : 'local/test env'}`)
     // Local/test or explicit STUB => return mock but include reason
     return {
       calendarEventId: `stub-event-${params.cancelToken}`,
@@ -460,7 +444,6 @@ export async function createBookingEvent(env: any, params: CreateEventParams): P
   }
 
   try {
-    console.log('!!! GCAL_CREATE_PARSE_SA_KEY_START')
     // Reuse JWT logic from getFreeBusy but with calendar.events scope
     let saKey: any
     if (typeof saKeyRaw === 'string') {
@@ -468,7 +451,6 @@ export async function createBookingEvent(env: any, params: CreateEventParams): P
     } else {
       saKey = saKeyRaw
     }
-    console.log(`!!! GCAL_SA_PARSED email=${saKey.client_email}`)
 
     const now = Math.floor(Date.now() / 1000)
     const header = { alg: 'RS256', typ: 'JWT' }
@@ -486,7 +468,6 @@ export async function createBookingEvent(env: any, params: CreateEventParams): P
     if (!pem) throw new Error('No private_key')
     const pemBody = pem.replace(/-----BEGIN PRIVATE KEY-----/, '').replace(/-----END PRIVATE KEY-----/, '').replace(/\s/g, '')
     const binaryDer = Uint8Array.from(atob(pemBody), (c) => c.charCodeAt(0))
-    console.log('!!! GCAL_IMPORT_PRIVATE_KEY')
     const cryptoKey = await crypto.subtle.importKey('pkcs8', binaryDer, { name: 'RSASSA-PKCS1-v1_5', hash: 'SHA-256' }, false, ['sign'])
     const headerB64 = enc(header)
     const payloadB64 = enc(payload)
@@ -497,30 +478,24 @@ export async function createBookingEvent(env: any, params: CreateEventParams): P
     sigArray.forEach((b) => (binary += String.fromCharCode(b)))
     const sigB64 = btoa(binary).replace(/\+/g, '-').replace(/\//g, '_').replace(/=+$/, '')
     const jwt = `${headerB64}.${payloadB64}.${sigB64}`
-    console.log('!!! GCAL_JWT_SIGNED')
 
-    console.log('!!! GCAL_TOKEN_EXCHANGE_START')
     const tokenRes = await fetch(saKey.token_uri || 'https://oauth2.googleapis.com/token', {
       method: 'POST',
       headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
       body: `grant_type=urn:ietf:params:oauth:grant-type:jwt-bearer&assertion=${jwt}`,
     })
-    console.log(`!!! GCAL_TOKEN_EXCHANGE_RESPONSE status=${tokenRes.status} ok=${tokenRes.ok}`)
 
     if (!tokenRes.ok) {
       const txt = await tokenRes.text().catch(() => '')
-      console.log(`!!! GCAL_TOKEN_EXCHANGE_FAILED status=${tokenRes.status} body=${txt.slice(0, 300)}`)
       throw new Error(`Token exchange failed ${tokenRes.status} ${txt.slice(0, 200)}`)
     }
     const tokenJson = (await tokenRes.json()) as any
     const accessToken = tokenJson.access_token
-    console.log(`!!! GCAL_ACCESS_TOKEN_OBTAINED hasToken=${!!accessToken}`)
     if (!accessToken) throw new Error('No access token')
 
     // Create event with Meet link auto via conferenceData
     // NOTE: Service accounts cannot invite attendees without Domain-Wide Delegation — causes 403 forbiddenForServiceAccounts
     // Fix: try with attendees first, if that fails with forbiddenForServiceAccounts, retry without attendees
-    console.log(`!!! GCAL_EVENT_CREATE_START summary=Meeting with ${params.firstName} start=${params.slot.start} end=${params.slot.end} bookingId=${bookingId.slice(0, 8)}...`)
     const basePayload = {
       summary: `Meeting with ${params.firstName} ${params.lastName}`,
       description: `${params.purpose || 'Intro call'}\n\nContact: ${params.email} ${params.phone || ''}\n\nCancel: ${siteUrl}/api/cancel/${params.cancelToken}`,
@@ -543,7 +518,6 @@ export async function createBookingEvent(env: any, params: CreateEventParams): P
     let eventPayloadUsed: any = withAttendeesPayload
 
     // First attempt — with attendees + Meet (would send Google invite if DWD allowed)
-    console.log('!!! GCAL_EVENT_CREATE_ATTEMPT_1_WITH_ATTENDEES_AND_MEET')
     createRes = await fetch(`https://www.googleapis.com/calendar/v3/calendars/${encodeURIComponent(bookingId)}/events?conferenceDataVersion=1&sendUpdates=all`, {
       method: 'POST',
       headers: {
@@ -552,16 +526,13 @@ export async function createBookingEvent(env: any, params: CreateEventParams): P
       },
       body: JSON.stringify(withAttendeesPayload),
     })
-    console.log(`!!! GCAL_EVENT_CREATE_RESPONSE_1 status=${createRes.status} ok=${createRes.ok}`)
 
     let bareEventWithoutMeet: any = null
 
     if (!createRes.ok) {
       const txt = await createRes.text().catch(() => '')
-      console.log(`!!! GCAL_EVENT_CREATE_FAILED_1 status=${createRes.status} body=${txt.slice(0, 800)}`)
       // If forbiddenForServiceAccounts — retry without attendees (works for personal Gmail & group calendars without DWD)
       if (txt.includes('forbiddenForServiceAccounts') || txt.includes('Service accounts cannot invite attendees')) {
-        console.log('!!! GCAL_CREATE_RETRY_WITHOUT_ATTENDEES reason=forbiddenForServiceAccounts — DWD not configured, creating event without attendees and relying on Resend email for confirmation')
         eventPayloadUsed = basePayload // no attendees but with Meet
         createRes = await fetch(`https://www.googleapis.com/calendar/v3/calendars/${encodeURIComponent(bookingId)}/events?conferenceDataVersion=1&sendUpdates=all`, {
           method: 'POST',
@@ -571,13 +542,10 @@ export async function createBookingEvent(env: any, params: CreateEventParams): P
           },
           body: JSON.stringify(basePayload),
         })
-        console.log(`!!! GCAL_EVENT_CREATE_RESPONSE_2_NO_ATTENDEES_WITH_MEET status=${createRes.status} ok=${createRes.ok}`)
         if (!createRes.ok) {
           const txt2 = await createRes.text().catch(() => '')
-          console.log(`!!! GCAL_EVENT_CREATE_FAILED_2 status=${createRes.status} body=${txt2.slice(0, 800)}`)
           // If invalid conference type — group calendars may not support hangoutsMeet via SA, retry bare event without Meet
           if (txt2.includes('Invalid conference type') || txt2.includes('conferenceType') || txt2.includes('conference type')) {
-            console.log('!!! GCAL_CREATE_RETRY_BARE_EVENT reason=Invalid conference type value — group calendar may not support hangoutsMeet via SA, creating bare event without Meet')
             const barePayload = {
               summary: basePayload.summary,
               description: basePayload.description,
@@ -593,17 +561,13 @@ export async function createBookingEvent(env: any, params: CreateEventParams): P
               },
               body: JSON.stringify(barePayload),
             })
-            console.log(`!!! GCAL_EVENT_CREATE_RESPONSE_3_BARE status=${createRes.status} ok=${createRes.ok}`)
             if (!createRes.ok) {
               const txt3 = await createRes.text().catch(() => '')
-              console.log(`!!! GCAL_EVENT_CREATE_FAILED_3_BARE status=${createRes.status} body=${txt3.slice(0, 800)}`)
               throw new Error(`Create event failed ${createRes.status} ${txt3} (retry bare also failed) — ${txt2}`)
             } else {
               bareEventWithoutMeet = await createRes.clone().json().catch(() => null)
-              console.log(`!!! GCAL_BARE_EVENT_CREATED id=${bareEventWithoutMeet?.id || 'unknown'} — will attempt PATCH to add Meet with alternative types`)
               // Try to PATCH Meet with hangoutsMeet as conferenceData (some calendars allow PATCH but not POST)
               try {
-                console.log('!!! GCAL_TRY_PATCH_MEET_HANGOUTSMEET')
                 const patchRes = await fetch(`https://www.googleapis.com/calendar/v3/calendars/${encodeURIComponent(bookingId)}/events/${encodeURIComponent(bareEventWithoutMeet.id)}?conferenceDataVersion=1`, {
                   method: 'PATCH',
                   headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${accessToken}` },
@@ -614,27 +578,22 @@ export async function createBookingEvent(env: any, params: CreateEventParams): P
                   }),
                 })
                 const patchTxt = await patchRes.text().catch(() => '')
-                console.log(`!!! GCAL_PATCH_MEET_RESPONSE status=${patchRes.status} ok=${patchRes.ok} body=${patchTxt.slice(0, 500)}`)
                 if (patchRes.ok) {
                   const patched = JSON.parse(patchTxt)
                   const patchedLink = patched.conferenceData?.entryPoints?.[0]?.uri || patched.hangoutLink
                   if (patchedLink) {
-                    console.log(`!!! GCAL_PATCH_MEET_SUCCESS link=${patchedLink}`)
                     // Merge patched data into createRes for later meetLink extraction
                     createRes = new Response(patchTxt, { status: 200 }) as any
                   }
                 } else {
-                  console.log('!!! GCAL_PATCH_MEET_FAILED trying eventHangout')
                 }
               } catch (e: any) {
-                console.log(`!!! GCAL_PATCH_MEET_EXCEPTION ${e?.message}`)
               }
             }
           } else {
             throw new Error(`Create event failed ${createRes.status} ${txt2} (retry without attendees failed) — original: ${txt}`)
           }
         } else {
-          console.log('!!! GCAL_CREATE_RETRY_SUCCESS without attendees — real Meet link will be generated, Resend will handle email invite')
         }
       } else {
         throw new Error(`Create event failed ${createRes.status} ${txt}`)
@@ -648,21 +607,17 @@ export async function createBookingEvent(env: any, params: CreateEventParams): P
     if (!meetLink) {
       // If bare event without Meet (group calendar doesn't support hangoutsMeet via SA), check if we have bareEventWithoutMeet
       if (bareEventWithoutMeet) {
-        console.log(`!!! GCAL_BARE_EVENT_NO_MEET id=${created.id || bareEventWithoutMeet.id} — group calendar may not support Meet via SA, returning live event without Meet link, Resend will handle email without Meet`)
         // For group calendars without Meet support, return empty meetLink but source live — calendar blocking still works
         meetLink = '' // No Meet — will be handled by booking.ts email (Resend without Meet) + UI warning
       } else {
         meetLink = `https://meet.google.com/fake-${params.cancelToken.slice(0, 8)}`
-        console.log(`!!! GCAL_MEET_FALLBACK_FAKE meetLink=${meetLink}`)
       }
     }
-    console.log(`!!! GCAL_EVENT_CREATED id=${created.id} meetLink=${meetLink || '(no Meet - bare event)'} source=live`)
 
     // Patch description to include actual Meet link + cancel link so Google invite contains meeting link text too per user request
     // Only patch if we have a real meetLink (not fake, not empty)
     if (meetLink && !meetLink.includes('fake-')) {
       try {
-        console.log('!!! GCAL_EVENT_PATCH_DESCRIPTION_START')
         await fetch(`https://www.googleapis.com/calendar/v3/calendars/${encodeURIComponent(bookingId)}/events/${encodeURIComponent(created.id)}?conferenceDataVersion=1`, {
           method: 'PATCH',
           headers: {
@@ -673,12 +628,9 @@ export async function createBookingEvent(env: any, params: CreateEventParams): P
             description: `${params.purpose || 'Intro call'}\n\nMeet: ${meetLink}\nCancel: ${siteUrl}/api/cancel/${params.cancelToken}\n\nContact: ${params.email} ${params.phone || ''}`,
           }),
         })
-        console.log('!!! GCAL_EVENT_PATCH_OK')
       } catch (e: any) {
-        console.log(`!!! GCAL_EVENT_PATCH_FAILED ${e?.message}`)
       }
     } else {
-      console.log('!!! GCAL_SKIP_PATCH no real Meet link')
     }
 
     return {
@@ -691,7 +643,6 @@ export async function createBookingEvent(env: any, params: CreateEventParams): P
     // For alpha/prod, we should NOT silently return fake — include detailed error so caller can surface
     // But for resilience, still return stub with error for observability
     const detailed = `createBookingEvent failed: ${e?.message || String(e)} — bookingId: ${bookingId ? 'present' : 'missing'}, env: ${env?.ENVIRONMENT}, hasKey: ${!!saKeyRaw}`
-    console.log(`!!! GCAL_CREATE_EXCEPTION ${detailed}`)
     console.error(detailed)
 
     // In prod/alpha, if we have key and bookingId, this is a real error (likely permission 403 or bad calendar ID)
