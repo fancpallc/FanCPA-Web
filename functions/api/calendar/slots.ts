@@ -34,7 +34,6 @@ function parseWorkingDays(raw?: string): number[] {
 
 export const onRequestGet: PagesFunction<Env> = async ({ request, env }) => {
   try {
-    console.log('!!! SLOTS_REQUEST_START')
     const url = new URL(request.url)
     const weeksParam = url.searchParams.get('weeks')
     let weeks = 2
@@ -44,7 +43,6 @@ export const onRequestGet: PagesFunction<Env> = async ({ request, env }) => {
         weeks = parsed
       }
     }
-    console.log(`!!! SLOTS_PARAMS weeks=${weeks} url=${request.url}`)
 
     // Default true per requirement assume dont schedule today (C1)
     const excludeToday = parseExcludeToday((env as any)?.EXCLUDE_TODAY ?? (env as any)?.CALENDAR_EXCLUDE_TODAY ?? 'true')
@@ -57,12 +55,9 @@ export const onRequestGet: PagesFunction<Env> = async ({ request, env }) => {
       slotMinutes: normalizeSlotMinutes(env?.SLOT_DURATION_MINUTES || '30'),
       excludeToday,
     }
-    console.log(`!!! SLOTS_WORKING_HOURS start=${workingHours.start} end=${workingHours.end} days=${workingHours.days.join(',')} slotMinutes=${workingHours.slotMinutes} excludeToday=${excludeToday}`)
 
     // FreeBusy — stub when no SA key or ENVIRONMENT test/local or STUB flag
-    console.log('!!! SLOTS_FREEBUSY_CALL_START')
     const { busyBlocks, source, error } = await getFreeBusy(env)
-    console.log(`!!! SLOTS_FREEBUSY_RESULT source=${source} busyCount=${busyBlocks.length} error=${error || 'none'}`)
 
     let slots
     const startDate = new Date()
@@ -97,7 +92,6 @@ export const onRequestGet: PagesFunction<Env> = async ({ request, env }) => {
     }))
 
     const diag = getDiagInfo(env)
-    console.log(`!!! SLOTS_COMPUTE_DONE safeSlots=${safeSlots.length} source=${source}`)
 
     return new Response(
       JSON.stringify({
@@ -128,7 +122,6 @@ export const onRequestGet: PagesFunction<Env> = async ({ request, env }) => {
       }
     )
   } catch (e: any) {
-    console.log(`!!! SLOTS_EXCEPTION ${e?.message}`)
     // Fallback to stub on error — respect excludeToday true default
     const fallbackSlots = getStubSlots(2, true)
     return new Response(
