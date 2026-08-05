@@ -42,7 +42,11 @@ export function BookingForm({ slot, onSuccess, onCancel }: BookingFormProps) {
       setTurnstileToken('fake-token-for-test')
       return true
     }
-    const siteKey = (window as any)?.TURNSTILE_SITE_KEY || '0x4AAAAAAEFtPVYesU8mlFUf'
+    const siteKey = (window as any)?.TURNSTILE_SITE_KEY
+    if (!siteKey) { 
+      debug('!!! TURNSTILE_SITE_KEY NOT SET')
+      return false
+    }
     if (typeof window !== 'undefined' && (window as any).turnstile) {
       try {
         debug(`!!! TURNSTILE_FORM_RENDER_START siteKey=${siteKey}`)
@@ -425,7 +429,7 @@ export function BookingForm({ slot, onSuccess, onCancel }: BookingFormProps) {
             connect to website / Troubleshoot" panel — vendor failure jargon as the first
             thing a visitor reads, saying the same thing as our own message in a second
             voice. `before-interactive-callback` reveals it if a real challenge appears. */}
-        <div id="turnstile-widget" data-sitekey="0x4AAAAAAEFtPVYesU8mlFUf" className={needsInteraction ? '' : 'hidden'} />
+        <div id="turnstile-widget" className={needsInteraction ? '' : 'hidden'} />
         {challengeFailed && (
           <div className="p-3 rounded-xl border border-amber-200 bg-amber-50 text-xs text-amber-800" role="alert">
             We couldn't run the spam check — it may be blocked by your browser or network.{' '}
