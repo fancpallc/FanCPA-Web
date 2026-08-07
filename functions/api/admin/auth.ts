@@ -10,6 +10,7 @@ export interface Env {
 }
 
 export const onRequestGet: PagesFunction<Env> = async ({ request, env }) => {
+  console.log('!!! ADMIN_AUTH_TOP_LEVEL_DEBUG request_url=' + request.url)
   const headers = {
     'Content-Type': 'application/json',
     'Cache-Control': 'no-store',
@@ -30,7 +31,6 @@ export const onRequestGet: PagesFunction<Env> = async ({ request, env }) => {
         bypass: false,
         env: envName,
         error: result.error,
-        // Do NOT leak allowlist contents
         allowlistConfigured: getAdminAllowlist(env).length > 0,
       }),
       { status, headers }
@@ -44,7 +44,6 @@ export const onRequestGet: PagesFunction<Env> = async ({ request, env }) => {
       email: result.email,
       bypass: !!result.bypass,
       env: envName,
-      // Diagnostics only booleans, no PII leak except own email (already authed)
       diagnostics: {
         allowlistConfigured: getAdminAllowlist(env).length > 0,
         bypassEnabled: isAdminBypass(env),
