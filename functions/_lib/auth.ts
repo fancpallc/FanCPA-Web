@@ -144,7 +144,6 @@ export function isAdminAuthenticated(request: any, env: any): AuthResult {
     }
   }
 
-  const headers = request?.headers
   if (!headers) {
     return {
       authed: false,
@@ -232,3 +231,4 @@ export function requireAdminAuth(request: any, env: any): Response | null {
     }
   )
 }
+
