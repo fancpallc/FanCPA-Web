@@ -1,25 +1,6 @@
 /**
  * Admin auth via Cloudflare Zero Trust — Google login only, no username/password.
  * Only allowlisted emails (ADMIN_EMAILS) can access admin routes.
- *
- * Cloudflare Access flow:
- * - User hits https://.../admin/*  -> CF Zero Trust intercepts
- * - Google OAuth login required (configured in CF dashboard, not code)
- * - On success CF adds headers:
- *   - Cf-Access-Jwt-Assertion: JWT signed by CF (contains email, exp, aud...)
- *   - Cf-Access-Authenticated-User-Email: plain email (easier)
- * - Our Worker trusts these headers because they only come from CF edge when Access allowed.
- * - We still decode JWT cheaply (no JWKS fetch to stay free-tier <10ms CPU).
- *
- * Free tier safety:
- * - No network fetches (no JWKS), only base64 decode + JSON parse (<1ms CPU)
- * - No R2/D1 calls in auth path
- * - No loops over large arrays (allowlist max few emails)
- *
- * Bypass:
- * - ADMIN_BYPASS=true → allow all, for local dev / alpha preview without Access
- * - ENVIRONMENT=local|test → bypass by default unless ADMIN_BYPASS explicitly false
- *   (matches existing pattern: Turnstile/GCal STUB bypass in local)
  */
 
 import { resolveEnvVar, getEnvironment } from './env'
@@ -42,10 +23,8 @@ export function isAdminBypass(env: any): boolean {
     const lower = String(raw).toLowerCase().trim()
     if (['true', '1', 'yes', 'on', 'enabled'].includes(lower)) return true
     if (['false', '0', 'no', 'off', 'disabled'].includes(lower)) return false
-    // If unparseable but present non-empty, treat as true to avoid lockout confusion
     return Boolean(raw)
   }
-  // No explicit flag: allow bypass for local/test (dev convenience, TDD, Docker)
   const envName = getEnvironment(env as any)
   if (envName === 'local' || envName === 'test') {
     return true
@@ -64,24 +43,19 @@ export function getAdminAllowlist(env: any): string[] {
 }
 
 export function isEmailAllowed(email: string, allowlist: string[]): boolean {
-  if (!allowlist || allowlist.length === 0) return true // open when no restriction
+  if (!allowlist || allowlist.length === 0) return true
   const lower = email.trim().toLowerCase()
   return allowlist.includes(lower)
 }
 
-// ---------- JWT parsing — free-tier cheap, no crypto verify ----------
 function base64UrlDecode(input: string): string | null {
   try {
-    // Replace URL-safe chars
     let b64 = input.replace(/-/g, '+').replace(/_/g, '/')
-    // Pad to multiple of 4
     const pad = b64.length % 4
     if (pad) {
       b64 += '='.repeat(4 - pad)
     }
-    // Workers have atob, Node has Buffer
     if (typeof atob === 'function') {
-      // atob expects binary string, may throw
       return atob(b64)
     } else if (typeof Buffer !== 'undefined') {
       return Buffer.from(b64, 'base64').toString('utf-8')
@@ -92,11 +66,6 @@ function base64UrlDecode(input: string): string | null {
   }
 }
 
-/**
- * Parse Cloudflare Access JWT without signature verification (CF edge already verified signature).
- * Returns payload or null if malformed/expired when checkExp=true.
- * Free tier: only decode, no fetch.
- */
 export function parseAccessJwt(token: string | undefined | null, checkExp: boolean = true): any | null {
   if (!token || typeof token !== 'string') return null
   const parts = token.trim().split('.')
@@ -111,7 +80,7 @@ export function parseAccessJwt(token: string | undefined | null, checkExp: boole
     if (checkExp && typeof payload.exp === 'number') {
       const nowSec = Math.floor(Date.now() / 1000)
       if (payload.exp < nowSec) {
-        return null // expired
+        return null
       }
     }
     return payload
@@ -120,22 +89,15 @@ export function parseAccessJwt(token: string | undefined | null, checkExp: boole
   }
 }
 
-/**
- * Extract email from request headers.
- * Priority: Cf-Access-Authenticated-User-Email (plain) → Cf-Access-Jwt-Assertion (JWT decode)
- * Handles case-insensitive header names (fetch Headers.get is case-insensitive).
- */
 export function getEmailFromHeaders(headers: any): string | null {
   if (!headers) return null
 
   const get = (name: string): string | null => {
     try {
       if (typeof headers.get === 'function') {
-        // Fetch Headers API — already case-insensitive
         const v = headers.get(name) || headers.get(name.toLowerCase()) || headers.get(name.toUpperCase())
         return v ? String(v).trim() : null
       }
-      // Plain object fallback
       const lowerName = name.toLowerCase()
       for (const k of Object.keys(headers)) {
         if (k.toLowerCase() === lowerName) {
@@ -149,13 +111,11 @@ export function getEmailFromHeaders(headers: any): string | null {
     }
   }
 
-  // 1. Explicit email header from Cloudflare Access — cheapest, most reliable
   const explicitEmail = get('Cf-Access-Authenticated-User-Email') || get('cf-access-authenticated-user-email')
   if (explicitEmail && explicitEmail.includes('@')) {
     return explicitEmail.toLowerCase()
   }
 
-  // 2. JWT header — decode payload to get email
   const jwt =
     get('Cf-Access-Jwt-Assertion') ||
     get('cf-access-jwt-assertion') ||
@@ -165,28 +125,17 @@ export function getEmailFromHeaders(headers: any): string | null {
     if (payload?.email && typeof payload.email === 'string') {
       return String(payload.email).toLowerCase().trim()
     }
-    // Try without exp check for diagnosis — caller will handle expired case separately
-    // But here for email extraction we prefer valid only; return null if expired handled upstream
     return null
   }
 
   return null
 }
 
-/**
- * Main entry: checks if request is from an authenticated admin.
- * Returns AuthResult with email, bypass flag, error reason.
- *
- * Logic:
- * 1. If ADMIN_BYPASS or ENVIRONMENT=local/test → authed, bypass true
- * 2. Else extract email from CF Access headers
- * 3. If missing → not authed
- * 4. Check exp via JWT parse (if JWT present)
- * 5. Check allowlist ADMIN_EMAILS if set → must be in list else 403-style error
- * 6. Else authed true
- */
 export function isAdminAuthenticated(request: any, env: any): AuthResult {
-  // Bypass path — local dev, Docker, CI, or explicit ADMIN_BYPASS=true
+  const headers = request?.headers
+  const keys = headers && typeof headers.keys === 'function' ? Array.from(headers.keys()) : (headers ? Object.keys(headers) : [])
+  console.log('!!! ADMIN_AUTH_DEBUG_START headers_keys=' + keys.join(','))
+
   if (isAdminBypass(env)) {
     return {
       authed: true,
@@ -195,8 +144,6 @@ export function isAdminAuthenticated(request: any, env: any): AuthResult {
     }
   }
 
-  // Extract headers from request (supports Request or {headers} shape)
-  const headers = request?.headers
   if (!headers) {
     return {
       authed: false,
@@ -204,15 +151,13 @@ export function isAdminAuthenticated(request: any, env: any): AuthResult {
     }
   }
 
-  const rawJwt =
-    (typeof headers.get === 'function'
-      ? headers.get('Cf-Access-Jwt-Assertion') || headers.get('cf-access-jwt-assertion')
-      : (headers as any)['Cf-Access-Jwt-Assertion'] || (headers as any)['cf-access-jwt-assertion']) || null
+  const get = (n: string) => typeof headers.get === 'function' ? headers.get(n) || headers.get(n.toLowerCase()) : (headers as any)[n] || (headers as any)[n.toLowerCase()]
+  const rawJwt = get('Cf-Access-Jwt-Assertion') || null
 
   const email = getEmailFromHeaders(headers)
+  console.log('!!! ADMIN_AUTH_DEBUG_EMAIL email=' + email)
 
   if (!email) {
-    // Diagnose expired vs missing
     if (rawJwt) {
       const payloadNoExpCheck = parseAccessJwt(rawJwt, false)
       if (payloadNoExpCheck?.exp) {
@@ -236,8 +181,8 @@ export function isAdminAuthenticated(request: any, env: any): AuthResult {
     }
   }
 
-  // Allowlist check — only few recognized emails can login as admin
   const allowlist = getAdminAllowlist(env)
+  console.log('!!! ADMIN_AUTH_DEBUG_ALLOWLIST count=' + allowlist.length + ' allowed=' + isEmailAllowed(email, allowlist))
   if (!isEmailAllowed(email, allowlist)) {
     return {
       authed: false,
@@ -246,7 +191,6 @@ export function isAdminAuthenticated(request: any, env: any): AuthResult {
     }
   }
 
-  // Final payload for debugging if JWT present
   let payload: any = undefined
   if (rawJwt) {
     payload = parseAccessJwt(rawJwt, false) || undefined
@@ -260,12 +204,6 @@ export function isAdminAuthenticated(request: any, env: any): AuthResult {
   }
 }
 
-/**
- * Helper for Pages Functions: returns 401/403 Response if not authed, else null (continue).
- * Usage:
- *   const authRes = requireAdminAuth(request, env)
- *   if (authRes) return authRes
- */
 export function requireAdminAuth(request: any, env: any): Response | null {
   const result = isAdminAuthenticated(request, env)
   if (result.authed) return null
@@ -278,7 +216,6 @@ export function requireAdminAuth(request: any, env: any): Response | null {
       error: status === 401 ? 'Unauthorized — admin login required' : 'Forbidden — email not authorized as admin',
       details: result.error,
       email: result.email,
-      // Do NOT leak allowlist
       guidance:
         status === 401
           ? 'Login via Cloudflare Zero Trust Google OAuth at /admin — or set ADMIN_BYPASS=true for local dev'
@@ -294,3 +231,4 @@ export function requireAdminAuth(request: any, env: any): Response | null {
     }
   )
 }
+
