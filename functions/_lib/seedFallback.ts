@@ -42,10 +42,10 @@ export interface FallbackSection {
 export const FALLBACK_PAGE = {
   id: 'page_home',
   slug: 'home',
-  title: 'Jane Doe — Designer & Developer',
-  meta_description: 'Portfolio of Jane Doe — branding, design, and development services',
-  site_name: 'Jane Doe',
-  footer_tagline: 'Strategic brand design and development for ambitious teams. Book a free intro call to start.',
+  title: 'FanCPA — Professional Accounting & Tax Services',
+  meta_description: 'Expert accounting, tax preparation, and bookkeeping services for small businesses and individuals.',
+  site_name: 'FanCPA',
+  footer_tagline: 'Empowering Your Financial Success. Schedule a meeting to start.',
   sort_order: 0,
   is_published: 1,
 }
@@ -55,8 +55,8 @@ export const FALLBACK_SECTIONS: FallbackSection[] = [
     id: 'sec_hero',
     page_id: 'page_home',
     type: 'hero',
-    heading: 'Hi, I am Jane — Designer & Developer',
-    subheading: 'Crafting brand identities and digital experiences that inspire',
+    heading: 'Empowering Your Financial Success',
+    subheading: 'Reliable accounting, tax strategy, and payroll services for your business.',
     sort_order: 0,
     config: { theme: 'light', align: 'left' },
     is_visible: 1,
@@ -64,13 +64,11 @@ export const FALLBACK_SECTIONS: FallbackSection[] = [
       {
         id: 'item_hero_1',
         section_id: 'sec_hero',
-        title: 'Welcome to My Portfolio',
-        body: 'I help startups build memorable brands and intuitive digital products. Based in San Francisco, working globally.',
-        image_url: 'https://images.unsplash.com/photo-1498050108023-c5249f4df085?w=1200&auto=format&fit=crop', image_alt: 'Designer at a desk working on a laptop',
-        // Booking is the one destination that is always on the page, so the headline
-        // button points there and says so.
+        title: 'Your Partner in Accounting',
+        body: 'We provide comprehensive financial management to help your business thrive. Focus on your growth while we handle the numbers.',
+        image_url: 'https://images.unsplash.com/photo-1554224155-8d04cb21cd6c?w=1200&auto=format&fit=crop', image_alt: 'Professional financial advisor working on documents',
         link_url: '/#calendar',
-        link_text: 'Book a free call',
+        link_text: 'Schedule a meeting',
         sort_order: 0,
         is_visible: 1,
       },

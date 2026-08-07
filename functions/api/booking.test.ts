@@ -67,7 +67,7 @@ describe('POST /api/booking — full 10-step workflow', () => {
     const request = new Request('http://localhost:8788/api/booking', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ firstName: 'John', lastName: 'Doe', email: 'john@example.com', slot: { start: '2026-08-02T13:00:00Z', end: '2026-08-02T13:30:00Z' }, turnstileToken: '' }),
+      body: JSON.stringify({ firstName: 'John', lastName: 'Doe', email: 'john@example.com', slot: { start: '2030-08-02T13:00:00Z', end: '2030-08-02T13:30:00Z' }, turnstileToken: '' }),
     })
 
     // Mock fetch for turnstile to return false
@@ -111,7 +111,7 @@ describe('POST /api/booking — full 10-step workflow', () => {
         firstName: 'Existing',
         lastName: 'User',
         email: 'existing@example.com',
-        slot: { date: '2026-08-02', start: '2026-08-02T13:00:00Z', end: '2026-08-02T13:30:00Z', available: true },
+        slot: { date: '2030-08-02', start: '2030-08-02T13:00:00Z', end: '2030-08-02T13:30:00Z', available: true },
         purpose: 'Follow up',
         turnstileToken: 'fake',
       }),
@@ -186,7 +186,7 @@ describe('POST /api/booking — full 10-step workflow', () => {
         email: 'jane@example.com',
         phone: '+1 555 123 4567',
         purpose: 'Brand strategy intro',
-        slot: { date: '2026-08-02', start: '2026-08-02T13:00:00Z', end: '2026-08-02T13:30:00Z', available: true },
+        slot: { date: '2030-08-02', start: '2030-08-02T13:00:00Z', end: '2030-08-02T13:30:00Z', available: true },
         turnstileToken: 'fake-token',
       }),
     })
@@ -227,7 +227,7 @@ describe('POST /api/booking — full 10-step workflow', () => {
         firstName: 'Jane',
         lastName: 'Doe',
         email: 'limited@example.com',
-        slot: { date: '2026-08-02', start: '2026-08-02T13:00:00Z', end: '2026-08-02T13:30:00Z', available: true },
+        slot: { date: '2030-08-02', start: '2030-08-02T13:00:00Z', end: '2030-08-02T13:30:00Z', available: true },
         turnstileToken: 'fake',
       }),
     })
@@ -243,7 +243,7 @@ describe('POST /api/booking — full 10-step workflow', () => {
     const reqInvalidEmail = new Request('http://localhost:8788/api/booking', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ firstName: 'John', lastName: 'Doe', email: 'not-an-email', slot: { start: '2026-08-02T13:00:00Z', end: '2026-08-02T13:30:00Z' }, turnstileToken: 'fake' }),
+      body: JSON.stringify({ firstName: 'John', lastName: 'Doe', email: 'not-an-email', slot: { start: '2030-08-02T13:00:00Z', end: '2030-08-02T13:30:00Z' }, turnstileToken: 'fake' }),
     })
     const resInvalidEmail = await onRequestPost({ request: reqInvalidEmail, env, params: {}, waitUntil: () => {}, next: async () => new Response(''), data: {} } as any)
     expect(resInvalidEmail.status).toBe(400)
