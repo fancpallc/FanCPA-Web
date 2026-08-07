@@ -16,6 +16,7 @@ export interface AuthResult {
   payload?: any
 }
 
+// ---------- Bypass logic ----------
 export function isAdminBypass(env: any): boolean {
   const raw = resolveEnvVar(env, ADMIN_BYPASS_ALIASES)
   if (raw !== undefined) {
@@ -31,6 +32,7 @@ export function isAdminBypass(env: any): boolean {
   return false
 }
 
+// ---------- Allowlist ----------
 export function getAdminAllowlist(env: any): string[] {
   const raw = resolveEnvVar(env, ADMIN_EMAILS_ALIASES)
   if (!raw) return []
@@ -130,9 +132,7 @@ export function getEmailFromHeaders(headers: any): string | null {
 }
 
 export function isAdminAuthenticated(request: any, env: any): AuthResult {
-  const headers = request?.headers
-  const keys = headers && typeof headers.keys === 'function' ? Array.from(headers.keys()) : (headers ? Object.keys(headers) : [])
-  console.log('!!! ADMIN_AUTH_DEBUG_START headers_keys=' + keys.join(','))
+  console.log('!!! ADMIN_AUTH_DEBUG_START headers_keys=' + Array.from(request.headers.keys()).join(','))
 
   if (isAdminBypass(env)) {
     return {
@@ -142,6 +142,7 @@ export function isAdminAuthenticated(request: any, env: any): AuthResult {
     }
   }
 
+  const headers = request?.headers
   if (!headers) {
     return {
       authed: false,
@@ -149,8 +150,10 @@ export function isAdminAuthenticated(request: any, env: any): AuthResult {
     }
   }
 
-  const get = (n: string) => (typeof headers.get === 'function' ? headers.get(n) || headers.get(n.toLowerCase()) : (headers as any)[n] || (headers as any)[n.toLowerCase()])
-  const rawJwt = get('Cf-Access-Jwt-Assertion') || null
+  const rawJwt =
+    (typeof headers.get === 'function'
+      ? headers.get('Cf-Access-Jwt-Assertion') || headers.get('cf-access-jwt-assertion')
+      : (headers as any)['Cf-Access-Jwt-Assertion'] || (headers as any)['cf-access-jwt-assertion']) || null
 
   const email = getEmailFromHeaders(headers)
   console.log('!!! ADMIN_AUTH_DEBUG_EMAIL email=' + email)

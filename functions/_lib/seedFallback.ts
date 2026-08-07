@@ -42,10 +42,10 @@ export interface FallbackSection {
 export const FALLBACK_PAGE = {
   id: 'page_home',
   slug: 'home',
-  title: 'FanCPA — Professional Accounting & Tax Services',
-  meta_description: 'Comprehensive tax, bookkeeping, and advisory services for businesses and individuals.',
-  site_name: 'FanCPA',
-  footer_tagline: 'Expert tax strategy and precise bookkeeping for your business.',
+  title: 'Jane Doe — Designer & Developer',
+  meta_description: 'Portfolio of Jane Doe — branding, design, and development services',
+  site_name: 'Jane Doe',
+  footer_tagline: 'Strategic brand design and development for ambitious teams. Book a free intro call to start.',
   sort_order: 0,
   is_published: 1,
 }
@@ -55,8 +55,8 @@ export const FALLBACK_SECTIONS: FallbackSection[] = [
     id: 'sec_hero',
     page_id: 'page_home',
     type: 'hero',
-    heading: 'Empowering Your Financial Success',
-    subheading: 'Expert tax strategy, precise bookkeeping, and personalized financial guidance to help your business thrive.',
+    heading: 'Hi, I am Jane — Designer & Developer',
+    subheading: 'Crafting brand identities and digital experiences that inspire',
     sort_order: 0,
     config: { theme: 'light', align: 'left' },
     is_visible: 1,
@@ -64,11 +64,13 @@ export const FALLBACK_SECTIONS: FallbackSection[] = [
       {
         id: 'item_hero_1',
         section_id: 'sec_hero',
-        title: 'Your Partner in Accounting',
-        body: 'Professional financial services designed to save you time and maximize your returns. We handle the numbers, so you can focus on your business.',
-        image_url: 'https://images.unsplash.com/photo-1554224155-8d04cb27cd6c?w=1200&auto=format&fit=crop', image_alt: 'Accounting workspace',
+        title: 'Welcome to My Portfolio',
+        body: 'I help startups build memorable brands and intuitive digital products. Based in San Francisco, working globally.',
+        image_url: 'https://images.unsplash.com/photo-1498050108023-c5249f4df085?w=1200&auto=format&fit=crop', image_alt: 'Designer at a desk working on a laptop',
+        // Booking is the one destination that is always on the page, so the headline
+        // button points there and says so.
         link_url: '/#calendar',
-        link_text: 'Schedule a meeting',
+        link_text: 'Book a free call',
         sort_order: 0,
         is_visible: 1,
       },
@@ -78,8 +80,8 @@ export const FALLBACK_SECTIONS: FallbackSection[] = [
     id: 'sec_services',
     page_id: 'page_home',
     type: 'cards-grid',
-    heading: 'Our Services',
-    subheading: 'Tailored solutions to manage your finances',
+    heading: 'Branding & More Services',
+    subheading: 'What I can do for you',
     sort_order: 1,
     config: { columns: 3 },
     is_visible: 0,
@@ -96,8 +98,8 @@ export const FALLBACK_SECTIONS: FallbackSection[] = [
     id: 'sec_about',
     page_id: 'page_home',
     type: 'text-block',
-    heading: 'About FanCPA',
-    subheading: 'Years of experience in navigating complex financial landscapes.',
+    heading: 'About Me',
+    subheading: 'Passion for design, 10 years experience',
     sort_order: 2,
     config: { image_position: 'left' },
     is_visible: 1,
@@ -192,4 +194,3 @@ export function fallbackAnchors(): Set<string> {
   }
   return anchors
 }
-
