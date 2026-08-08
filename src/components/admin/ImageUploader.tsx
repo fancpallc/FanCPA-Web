@@ -12,6 +12,10 @@ export interface ImageUploaderProps {
   variant?: 'card' | 'hero'
   /** What this image is, for the control's accessible name — e.g. "hero", "gallery item 3". */
   label?: string
+  /**
+   * If provided, the uploader will force the image to be resized to these max dimensions.
+   */
+  maxDimension?: number
   /** May be async — the uploader only reports success once this resolves, so a failed
    *  DB save is never shown as "Uploaded ✓". */
   onUploadComplete: (result: { url: string; key: string; size: number; format: string }) => void | Promise<void>
@@ -36,6 +40,7 @@ export function ImageUploader({
   inputId,
   variant = 'card',
   label,
+  maxDimension,
   onUploadComplete,
   onError,
 }: ImageUploaderProps) {
@@ -84,7 +89,8 @@ export function ImageUploader({
       setUploading(true)
       debug(`!!! IMAGE_UPLOADER_START name=${file.name} size=${file.size} type=${file.type}`)
 
-      const resized = await resizeImage(file, MAX_DIMENSION, MAX_FILE_SIZE)
+      const dimension = maxDimension || MAX_DIMENSION
+      const resized = await resizeImage(file, dimension, MAX_FILE_SIZE)
 
       debug(`!!! IMAGE_UPLOADER_RESIZED orig=${resized.originalSize} final=${resized.finalSize} format=${resized.format} ${resized.width}x${resized.height} q=${resized.quality}`)
 

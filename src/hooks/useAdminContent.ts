@@ -38,6 +38,7 @@ export interface AdminPage {
   meta_description?: string | null
   site_name?: string | null
   footer_tagline?: string | null
+  icon_url?: string | null
 }
 
 export interface UseAdminContentReturn {
@@ -202,3 +203,4 @@ export function useAdminContent(): UseAdminContentReturn {
     refetch: fetchContent,
   }
 }
+

@@ -23,6 +23,8 @@ export interface Page {
   site_name?: string | null
   /** The sentence under the footer brand. */
   footer_tagline?: string | null
+  /** Optional icon/logo URL. */
+  icon_url?: string | null
   sort_order: number
   is_published: number
 }
@@ -262,3 +264,4 @@ export async function createBooking(payload: BookingPayload, options: FetchOptio
     clearTimeout(timeout)
   }
 }
+
