@@ -290,11 +290,13 @@ export function Admin() {
               <div className="flex gap-4 items-end">
                 <div className="flex-none">
                   <div className="editor-chrome text-[11px] text-gray-500 mb-1">Icon</div>
-                  <div className="w-16 h-16 rounded-lg border bg-slate-50 overflow-hidden">
-                    <ImageUploader 
-                      variant="card" 
+                  <div className="w-16">
+                    <ImageUploader
+                      variant="icon"
+                      label="site"
                       maxDimension={128}
                       currentImageUrl={content.page?.icon_url || undefined}
+                      oldKey={getOldKeyFromUrl(content.page?.icon_url)}
                       onUploadComplete={async (r) => { try { await content.updatePage({ icon_url: r.url }) } catch (e: any) { setGlobalError(e?.message) } }}
                     />
                   </div>

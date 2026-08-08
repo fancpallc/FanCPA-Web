@@ -17,7 +17,7 @@ describe('PUT /api/admin/pages/:slug — the site’s own name', () => {
   let page: any
 
   beforeEach(() => {
-    page = { id: 'page_home', slug: 'home', title: 'Jane Doe — Designer', meta_description: 'Old', site_name: 'Jane Doe', footer_tagline: 'Old line' }
+    page = { id: 'page_home', slug: 'home', title: 'Jane Doe — Designer', meta_description: 'Old', site_name: 'Jane Doe', footer_tagline: 'Old line', icon_url: null }
     const makeStmt = (sql: string) => ({
       bind: (...args: any[]) => ({
         first: async () => (sql.includes('FROM pages') && args[args.length - 1] === page.slug ? page : null),
@@ -63,6 +63,12 @@ describe('PUT /api/admin/pages/:slug — the site’s own name', () => {
     expect(json.site_name).toBe('Studio Nine')
     expect(json.footer_tagline).toBe('Brand work for founders.')
     expect(json.title).toBe('Jane Doe — Designer')
+  })
+
+  it('stores the uploaded site icon URL', async () => {
+    const res = await put({ icon_url: '/api/images/portfolio/site-icon.png' })
+    expect(res.status).toBe(200)
+    expect((await res.json() as any).icon_url).toBe('/api/images/portfolio/site-icon.png')
   })
 
   it('trims whitespace rather than storing a padded name', async () => {

@@ -10,12 +10,13 @@ export interface Env {
 }
 
 /** Fields the owner may edit. `slug` and `id` are deliberately not among them. */
-const EDITABLE = ['site_name', 'footer_tagline', 'title', 'meta_description'] as const
+const EDITABLE = ['site_name', 'footer_tagline', 'icon_url', 'title', 'meta_description'] as const
 
 /** Long enough for a name or a sentence; short enough that the header cannot be broken. */
 const MAX_LENGTH: Record<(typeof EDITABLE)[number], number> = {
   site_name: 40,
   footer_tagline: 200,
+  icon_url: 2_000,
   title: 70,
   meta_description: 160,
 }

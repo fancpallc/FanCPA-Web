@@ -91,6 +91,27 @@ describe('ImageUploader — PNG if ≤1MB else WebP within 1MB', () => {
     expect(clickSpy).toHaveBeenCalled()
   })
 
+  it('allows a 128px icon after resizing it for the site icon slot', async () => {
+    mockResizeImage.mockResolvedValue({
+      blob: new Blob(['icon'], { type: 'image/png' }),
+      originalSize: 500,
+      finalSize: 500,
+      format: 'png',
+      width: 128,
+      height: 128,
+      quality: 1,
+    })
+    mockFetch.mockResolvedValue({
+      ok: true,
+      json: async () => ({ key: 'portfolio/site-icon.png', url: '/api/images/portfolio/site-icon.png', size: 500, format: 'png' }),
+    } as any)
+    const onComplete = vi.fn()
+    render(<ImageUploader variant="icon" maxDimension={128} onUploadComplete={onComplete} />)
+    const input = document.querySelector('input[type="file"]') as HTMLInputElement
+    fireEvent.change(input, { target: { files: [makeFile('icon.png', 500, 'image/png')] } })
+    await waitFor(() => expect(onComplete).toHaveBeenCalledWith(expect.objectContaining({ url: '/api/images/portfolio/site-icon.png' })))
+  })
+
   it('rejects non-image file type', async () => {
     const onError = vi.fn()
     render(<ImageUploader onUploadComplete={vi.fn()} onError={onError} />)

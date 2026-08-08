@@ -8,8 +8,8 @@ export interface ImageUploaderProps {
   oldKey?: string
   /** Explicit id for the file input so an outside element can trigger it via label/getElementById */
   inputId?: string
-  /** 'card' = compact thumbnail row, 'hero' = large 4:3 preview. Both render exactly one upload control. */
-  variant?: 'card' | 'hero'
+  /** 'card' = compact thumbnail row, 'hero' = large 4:3 preview, 'icon' = small square site icon. */
+  variant?: 'card' | 'hero' | 'icon'
   /** What this image is, for the control's accessible name — e.g. "hero", "gallery item 3". */
   label?: string
   /**
@@ -26,7 +26,7 @@ export interface ImageUploaderProps {
  * Smallest width worth accepting per slot, roughly the CSS width each renders at on a
  * 1440px screen. Anything narrower is upscaled by `object-cover` and looks broken.
  */
-export const MIN_WIDTH_BY_VARIANT: Record<'card' | 'hero', number> = { card: 320, hero: 640 }
+export const MIN_WIDTH_BY_VARIANT: Record<'card' | 'hero' | 'icon', number> = { card: 320, hero: 640, icon: 16 }
 
 function formatBytes(bytes: number): string {
   if (bytes < 1024) return `${bytes} B`
@@ -287,6 +287,40 @@ export function ImageUploader({
             </div>
           )}
         </div>
+        {statusLine}
+      </div>
+    )
+  }
+
+  if (variant === 'icon') {
+    return (
+      <div className="flex flex-col gap-1.5">
+        {fileInput}
+        <button
+          {...dragProps}
+          type="button"
+          onClick={openPicker}
+          disabled={uploading}
+          aria-label={`${hasImage ? 'Replace' : 'Upload'} ${label || 'site'} icon`}
+          aria-busy={uploading}
+          className={`relative block w-16 h-16 rounded-lg overflow-hidden transition-colors focus:outline-none focus-visible:ring-2 focus-visible:ring-slate-900 focus-visible:ring-offset-2 disabled:cursor-not-allowed ${
+            hasImage ? 'bg-slate-100' : 'border-2 border-dashed border-slate-300 bg-slate-50 hover:border-slate-900 hover:bg-slate-100'
+          } ${dragOver ? 'ring-2 ring-slate-900 ring-offset-2' : ''} ${uploading ? 'opacity-60' : ''}`}
+        >
+          {hasImage ? (
+            <SafeImage src={displayUrl!} alt={`${label || 'Site'} icon`} className="w-full h-full object-cover" loading="lazy" />
+          ) : (
+            <span className="w-full h-full flex items-center justify-center text-gray-400" aria-hidden>
+              <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round">
+                <rect x="3" y="3" width="18" height="18" rx="2" />
+                <circle cx="8.5" cy="8.5" r="1.5" />
+                <path d="m21 15-5-5L5 21" />
+              </svg>
+            </span>
+          )}
+          {hasImage && !uploading && <span className="absolute inset-0 flex items-center justify-center bg-black/40 text-[10px] font-semibold text-white opacity-0 hover:opacity-100 focus-within:opacity-100">Replace</span>}
+          {uploading && <span className="absolute inset-0 flex items-center justify-center bg-white/60"><span className="w-5 h-5 border-2 border-slate-300 border-t-slate-900 rounded-full animate-spin" aria-hidden /></span>}
+        </button>
         {statusLine}
       </div>
     )
