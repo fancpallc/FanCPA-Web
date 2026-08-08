@@ -49,7 +49,19 @@ export function Nav({ title = 'FAN CPA LLC' }: NavProps) {
     // inverted — role="banner" on the <nav>, with a role="navigation" div inside it.
     <header className="border-b bg-white sticky top-0 z-10">
       <nav className="max-w-5xl mx-auto px-6 py-4 flex justify-between items-center gap-4" aria-label="Main navigation">
-        <div className="font-black text-xl tracking-tight flex-none" style={{ fontFamily: 'Playfair Display, serif' }}>{title}</div>
+        <div className="font-black text-xl tracking-tight flex-none" style={{ fontFamily: 'Playfair Display, serif' }}>
+          <a
+            href="/"
+            className="hover:opacity-75 transition-opacity"
+            onClick={(e) => {
+              e.preventDefault()
+              window.scrollTo({ top: 0, behavior: 'smooth' })
+              window.history.pushState(null, '', '/')
+            }}
+          >
+            {title}
+          </a>
+        </div>
         {/* One row at every width. Below 640px the section links wrapped under the
             wordmark and the sticky bar grew to 137px — 16% of a phone screen — so on a
             phone they collapse behind a Menu button instead of disappearing entirely. */}
@@ -57,8 +69,8 @@ export function Nav({ title = 'FAN CPA LLC' }: NavProps) {
           {sectionLinks.map((item) => (
             <a key={item.href} href={item.href} className={`${collapseOnMobile ? 'hidden sm:inline-flex' : 'inline-flex'} hover:underline focus:outline-none focus:underline items-center min-h-11 px-1`}>
               {item.label}
-            </a>
-          ))}
+                    </a>
+                  ))}
           <a href="#calendar" className="inline-flex items-center min-h-11 px-4 rounded-full bg-slate-900 text-white whitespace-nowrap">
             Book a free call
           </a>
