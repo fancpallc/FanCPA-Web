@@ -3,6 +3,7 @@ export interface Page {
   slug: string
   title: string
   meta_description?: string | null
+  icon_url?: string | null
   sort_order: number
   is_published: number
   updated_at?: string

@@ -297,7 +297,14 @@ export function Admin() {
                       maxDimension={128}
                       currentImageUrl={content.page?.icon_url || undefined}
                       oldKey={getOldKeyFromUrl(content.page?.icon_url)}
-                      onUploadComplete={async (r) => { try { await content.updatePage({ icon_url: r.url }) } catch (e: any) { setGlobalError(e?.message) } }}
+                      onUploadComplete={async (r) => {
+                        try {
+                          await content.updatePage({ icon_url: r.url })
+                        } catch (e: any) {
+                          setGlobalError(e?.message)
+                          throw e
+                        }
+                      }}
                     />
                   </div>
                 </div>
