@@ -10,10 +10,12 @@ export interface Env {
 }
 
 /** Fields the owner may edit. `slug` and `id` are deliberately not among them. */
-const EDITABLE = ['site_name', 'footer_tagline', 'icon_url', 'title', 'meta_description'] as const
+const TEXT_EDITABLE = ['site_name', 'footer_tagline', 'icon_url', 'title', 'meta_description'] as const
+const VISIBILITY_EDITABLE = ['calendar_visible', 'booking_cta_visible'] as const
+const EDITABLE = [...TEXT_EDITABLE, ...VISIBILITY_EDITABLE] as const
 
 /** Long enough for a name or a sentence; short enough that the header cannot be broken. */
-const MAX_LENGTH: Record<(typeof EDITABLE)[number], number> = {
+const MAX_LENGTH: Record<(typeof TEXT_EDITABLE)[number], number> = {
   site_name: 40,
   footer_tagline: 200,
   icon_url: 2_000,
@@ -60,11 +62,17 @@ export const onRequestPut: PagesFunction<Env> = async ({ request, env, params })
 
   for (const field of patch) {
     const value = body[field]
+    if ((VISIBILITY_EDITABLE as readonly string[]).includes(field)) {
+      if (value !== 0 && value !== 1) {
+        return new Response(JSON.stringify({ error: `${field} must be 0 or 1` }), { status: 400, headers })
+      }
+      continue
+    }
     if (value !== null && typeof value !== 'string') {
       return new Response(JSON.stringify({ error: `${field} must be text` }), { status: 400, headers })
     }
-    if (typeof value === 'string' && value.length > MAX_LENGTH[field]) {
-      return new Response(JSON.stringify({ error: `${field} must be ${MAX_LENGTH[field]} characters or fewer` }), { status: 400, headers })
+    if (typeof value === 'string' && value.length > MAX_LENGTH[field as (typeof TEXT_EDITABLE)[number]]) {
+      return new Response(JSON.stringify({ error: `${field} must be ${MAX_LENGTH[field as (typeof TEXT_EDITABLE)[number]]} characters or fewer` }), { status: 400, headers })
     }
     // The header would render an empty wordmark, and an empty browser-tab title shows
     // the raw URL. Both are worse than the placeholder they replaced.

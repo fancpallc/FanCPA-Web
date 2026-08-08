@@ -362,6 +362,25 @@ export function Admin() {
                   />
                 </div>
               </div>
+              <div className="lg:col-span-2 flex flex-wrap gap-3 pt-1">
+                <button
+                  type="button"
+                  aria-pressed={content.page?.calendar_visible !== 0}
+                  onClick={async () => { try { await content.updatePage({ calendar_visible: content.page?.calendar_visible === 0 ? 1 : 0 }) } catch (e: any) { setGlobalError(e?.message) } }}
+                  className="px-3 min-h-11 inline-flex items-center rounded-full border border-slate-500 text-xs font-semibold hover:border-slate-900"
+                >
+                  {content.page?.calendar_visible !== 0 ? 'Hide booking calendar' : 'Show booking calendar'}
+                </button>
+                <button
+                  type="button"
+                  aria-pressed={content.page?.booking_cta_visible !== 0}
+                  disabled={content.page?.calendar_visible === 0}
+                  onClick={async () => { try { await content.updatePage({ booking_cta_visible: content.page?.booking_cta_visible === 0 ? 1 : 0 }) } catch (e: any) { setGlobalError(e?.message) } }}
+                  className="px-3 min-h-11 inline-flex items-center rounded-full border border-slate-500 text-xs font-semibold hover:border-slate-900 disabled:opacity-50"
+                >
+                  {content.page?.booking_cta_visible !== 0 ? 'Hide booking buttons' : 'Show booking buttons'}
+                </button>
+              </div>
             </div>
           </div>
 

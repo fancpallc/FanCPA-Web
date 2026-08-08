@@ -7,9 +7,10 @@ export interface CTABannerProps {
   items: SectionItem[]
   /** In-page anchors that exist on this render. Undefined means "not told" — show everything. */
   anchors?: Set<string>
+  bookingCtaVisible?: boolean
 }
 
-export function CTABanner({ section, items, anchors }: CTABannerProps) {
+export function CTABanner({ section, items, anchors, bookingCtaVisible = true }: CTABannerProps) {
   const first = items[0]
   const ctaDead = isDeadAnchor(first?.link_url, anchors)
   const ctaHref = ctaDead ? '#calendar' : first?.link_url
@@ -24,7 +25,7 @@ export function CTABanner({ section, items, anchors }: CTABannerProps) {
         {section.heading && <h2 className="text-3xl lg:text-4xl font-black tracking-tight mb-4" style={{ fontFamily: 'Playfair Display, serif' }}>{section.heading}</h2>}
         {section.subheading && <p className="text-slate-300 mb-8 max-w-2xl mx-auto leading-relaxed">{section.subheading}</p>}
         <div className="flex gap-4 justify-center flex-wrap">
-          {ctaHref && (
+          {ctaHref && (ctaHref !== '#calendar' || bookingCtaVisible) && (
             <a href={ctaHref} className="inline-flex items-center gap-2 px-8 py-4 bg-white text-slate-900 rounded-full font-bold hover:bg-slate-100 shadow-lg focus:outline-none focus:ring-2 focus:ring-white focus:ring-offset-2 focus:ring-offset-slate-900 leading-none">
               {ctaText} <span aria-hidden>→</span>
             </a>

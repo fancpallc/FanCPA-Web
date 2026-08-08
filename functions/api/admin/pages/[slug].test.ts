@@ -17,7 +17,7 @@ describe('PUT /api/admin/pages/:slug — the site’s own name', () => {
   let page: any
 
   beforeEach(() => {
-    page = { id: 'page_home', slug: 'home', title: 'Jane Doe — Designer', meta_description: 'Old', site_name: 'Jane Doe', footer_tagline: 'Old line', icon_url: null }
+    page = { id: 'page_home', slug: 'home', title: 'Jane Doe — Designer', meta_description: 'Old', site_name: 'Jane Doe', footer_tagline: 'Old line', icon_url: null, calendar_visible: 1, booking_cta_visible: 1 }
     const makeStmt = (sql: string) => ({
       bind: (...args: any[]) => ({
         first: async () => (sql.includes('FROM pages') && args[args.length - 1] === page.slug ? page : null),
@@ -69,6 +69,20 @@ describe('PUT /api/admin/pages/:slug — the site’s own name', () => {
     const res = await put({ icon_url: '/api/images/portfolio/site-icon.png' })
     expect(res.status).toBe(200)
     expect((await res.json() as any).icon_url).toBe('/api/images/portfolio/site-icon.png')
+  })
+
+  it('can hide the calendar and booking call-to-action buttons', async () => {
+    const res = await put({ calendar_visible: 0, booking_cta_visible: 0 })
+    expect(res.status).toBe(200)
+    const json = await res.json() as any
+    expect(json.calendar_visible).toBe(0)
+    expect(json.booking_cta_visible).toBe(0)
+  })
+
+  it('rejects an invalid booking visibility value', async () => {
+    const res = await put({ calendar_visible: true })
+    expect(res.status).toBe(400)
+    expect((await res.json() as any).error).toMatch(/0 or 1/)
   })
 
   it('trims whitespace rather than storing a padded name', async () => {

@@ -30,5 +30,9 @@ describe('TextBlock / About', () => {
     render(<TextBlock section={{ id: 'sec3', type: 'text-block', heading: 'About' } as any} items={[]} />)
     expect(screen.getByRole('heading', { name: /about/i })).toBeInTheDocument()
   })
-})
 
+  it('hides its booking button when booking calls-to-action are disabled', () => {
+    render(<TextBlock section={{ id: 'sec3', type: 'text-block', heading: 'About' } as any} items={[]} bookingCtaVisible={false} />)
+    expect(screen.queryByRole('link', { name: /book a free call/i })).not.toBeInTheDocument()
+  })
+})

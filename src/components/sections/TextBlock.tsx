@@ -7,9 +7,10 @@ export interface TextBlockProps {
   items: SectionItem[]
   /** In-page anchors that exist on this render. Undefined means "not told" — show everything. */
   anchors?: Set<string>
+  bookingCtaVisible?: boolean
 }
 
-export function TextBlock({ section, items, anchors }: TextBlockProps) {
+export function TextBlock({ section, items, anchors, bookingCtaVisible = true }: TextBlockProps) {
   const first = items[0]
   return (
     <section className="py-20 lg:py-24 bg-slate-50" id="about">
@@ -34,9 +35,9 @@ export function TextBlock({ section, items, anchors }: TextBlockProps) {
               <div className="text-gray-600">{first.author}</div>
             </div>
           )}
-          <div className="mt-8 flex gap-3">
+          {bookingCtaVisible && <div className="mt-8 flex gap-3">
             <a href="#calendar" className="btn-primary text-sm">Book a free call</a>
-          </div>
+          </div>}
         </div>
       </div>
     </section>

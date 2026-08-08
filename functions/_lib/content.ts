@@ -4,6 +4,8 @@ export interface Page {
   title: string
   meta_description?: string | null
   icon_url?: string | null
+  calendar_visible?: number | null
+  booking_cta_visible?: number | null
   sort_order: number
   is_published: number
   updated_at?: string

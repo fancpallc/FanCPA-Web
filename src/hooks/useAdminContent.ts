@@ -39,6 +39,8 @@ export interface AdminPage {
   site_name?: string | null
   footer_tagline?: string | null
   icon_url?: string | null
+  calendar_visible?: number | null
+  booking_cta_visible?: number | null
 }
 
 export interface UseAdminContentReturn {
@@ -203,4 +205,3 @@ export function useAdminContent(): UseAdminContentReturn {
     refetch: fetchContent,
   }
 }
-

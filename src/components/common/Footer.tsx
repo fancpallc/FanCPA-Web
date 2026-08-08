@@ -11,6 +11,7 @@ export function Footer() {
   // brand and the copyright line named "Portfolio" on somebody else's website.
   const siteName = data?.page?.site_name?.trim() || 'Portfolio'
   const tagline = data?.page?.footer_tagline?.trim() || 'Book a free intro call to get started.'
+  const showBookingCta = data?.page?.calendar_visible !== 0 && data?.page?.booking_cta_visible !== 0
   const has = (type: string) => sections.some((s: any) => s.type === type)
   const services = (sections.find((s: any) => s.type === 'cards-grid')?.items || [])
     .map((i: any) => i.title)
@@ -50,11 +51,11 @@ export function Footer() {
               </div>
             </div>
           )}
-          <div className="bg-slate-50 border rounded-xl p-5 h-fit">
+          {showBookingCta && <div className="bg-slate-50 border rounded-xl p-5 h-fit">
             <div className="font-bold mb-2">Get in touch</div>
             <p className="text-gray-600 text-xs mb-4 max-w-[22ch]">Book a 30-min call. No pitch, just practical next steps.</p>
             <a href="#calendar" className="btn-primary text-sm w-full justify-center">Book a free call →</a>
-          </div>
+          </div>}
         </div>
         <div className="border-t mt-10 pt-6 flex flex-col sm:flex-row justify-between gap-3 text-xs text-gray-500">
           <div>© {new Date().getFullYear()} {siteName}. All rights reserved.</div>
