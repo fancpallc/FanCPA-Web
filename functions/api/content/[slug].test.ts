@@ -12,7 +12,7 @@ type MockD1 = {
 describe('GET /api/content/:slug', () => {
   let mockD1: MockD1
   let mockPages = [
-    { id: 'page1', slug: 'home', title: 'Portfolio', meta_description: 'My portfolio', sort_order: 0, is_published: 1 },
+    { id: 'page1', slug: 'home', title: 'Portfolio', meta_description: 'My portfolio', icon_url: '/api/images/portfolio/site-icon.png', sort_order: 0, is_published: 1 },
   ]
   let mockSections = [
     { id: 'sec1', page_id: 'page1', type: 'hero', heading: 'Welcome', subheading: 'Sub', sort_order: 0, config: '{"theme":"dark"}', is_visible: 1 },
@@ -178,6 +178,12 @@ describe('GET /api/content/:slug', () => {
     const response = await onRequestGet({ request, env, params: { slug: 'home' }, waitUntil: () => {}, next: async () => new Response(''), data: {} } as any)
     const json = await response.json() as any
     expect(json.page.meta_description).toBe('My portfolio')
+  })
+
+  it('should include the site icon from the pages table', async () => {
+    const { onRequestGet } = await import('./[slug]')
+    const response = await onRequestGet({ request: new Request('http://localhost:8788/api/content/home'), env: { DB: mockD1, ENVIRONMENT: 'test' }, params: { slug: 'home' }, waitUntil: () => {}, next: async () => new Response(''), data: {} } as any)
+    expect((await response.json() as any).page.icon_url).toBe('/api/images/portfolio/site-icon.png')
   })
 
   it('should return cache header 5-min', async () => {

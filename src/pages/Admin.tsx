@@ -287,18 +287,40 @@ export function Admin() {
           <div className="p-4 border rounded-2xl bg-white shadow-sm">
             <p className="text-xs font-bold uppercase tracking-widest text-gray-500 mb-3">Your site</p>
             <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
-              <div>
-                <div className="editor-chrome text-[11px] text-gray-500 mb-1">Site name — shown in the header and the footer</div>
-                <div className="font-bold">
-                  <EditableText
-                    value={content.page?.site_name || ''}
-                    onSave={async (v) => { try { await content.updatePage({ site_name: v }) } catch (e: any) { setGlobalError(e?.message); throw e } }}
-                    placeholder="Your name or studio"
-                    required
-                    ariaLabel="Site name"
-                    displayClassName="font-bold"
-                    inputClassName="font-bold"
-                  />
+              <div className="flex gap-4 items-end">
+                <div className="flex-none">
+                  <div className="editor-chrome text-[11px] text-gray-500 mb-1">Icon</div>
+                  <div className="w-16">
+                    <ImageUploader
+                      variant="icon"
+                      label="site"
+                      maxDimension={128}
+                      currentImageUrl={content.page?.icon_url || undefined}
+                      oldKey={getOldKeyFromUrl(content.page?.icon_url)}
+                      onUploadComplete={async (r) => {
+                        try {
+                          await content.updatePage({ icon_url: r.url })
+                        } catch (e: any) {
+                          setGlobalError(e?.message)
+                          throw e
+                        }
+                      }}
+                    />
+                  </div>
+                </div>
+                <div className="flex-1">
+                  <div className="editor-chrome text-[11px] text-gray-500 mb-1">Site name — shown in the header and the footer</div>
+                  <div className="font-bold">
+                    <EditableText
+                      value={content.page?.site_name || ''}
+                      onSave={async (v) => { try { await content.updatePage({ site_name: v }) } catch (e: any) { setGlobalError(e?.message); throw e } }}
+                      placeholder="Your name or studio"
+                      required
+                      ariaLabel="Site name"
+                      displayClassName="font-bold"
+                      inputClassName="font-bold"
+                    />
+                  </div>
                 </div>
               </div>
               <div>

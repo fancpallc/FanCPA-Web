@@ -52,13 +52,14 @@ export function Nav({ title = 'FAN CPA LLC' }: NavProps) {
         <div className="font-black text-xl tracking-tight flex-none" style={{ fontFamily: 'Playfair Display, serif' }}>
           <a
             href="/"
-            className="hover:opacity-75 transition-opacity"
+            className="hover:opacity-75 transition-opacity flex items-center gap-2"
             onClick={(e) => {
               e.preventDefault()
               window.scrollTo({ top: 0, behavior: 'smooth' })
               window.history.pushState(null, '', '/')
             }}
           >
+            {data?.page?.icon_url && <img src={data.page.icon_url} alt="" className="w-8 h-8 rounded" />}
             {title}
           </a>
         </div>

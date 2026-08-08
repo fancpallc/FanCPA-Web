@@ -61,7 +61,7 @@ describe('Admin page — inline edit identical to landing', () => {
     expect(screen.getAllByText(/hero/i).length).toBeGreaterThan(0)
     // Hero has exactly one upload control — the large image itself, no duplicate uploader below
     expect(screen.getByRole('button', { name: /replace hero image/i })).toBeInTheDocument()
-    expect(document.querySelectorAll('input[type="file"]')).toHaveLength(1)
+    expect(document.querySelectorAll('input[type="file"]')).toHaveLength(2)
   })
 
   it('edit card not complicated — well aligned, no separate big Edit hero card', () => {
@@ -74,3 +74,4 @@ describe('Admin page — inline edit identical to landing', () => {
     expect(screen.getByText(/^Admin$/)).toBeInTheDocument()
   })
 })
+

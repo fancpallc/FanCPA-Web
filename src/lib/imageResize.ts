@@ -38,6 +38,16 @@ export function getScaledDimensions(width: number, height: number, maxDim: numbe
   }
 }
 
+/**
+ * The standard fallback sizes are intended for photos. Include a smaller requested
+ * maximum (such as a 128px site icon), otherwise the resize loop has no candidate
+ * and incorrectly reports that it failed at 600px without trying the icon size.
+ */
+export function getResizeDimensions(maxDim: number): number[] {
+  return [...new Set([...FALLBACK_DIMENSIONS.filter((dim) => dim <= maxDim), maxDim])]
+    .sort((a, b) => b - a)
+}
+
 function canvasToBlob(canvas: HTMLCanvasElement, type: string, quality?: number): Promise<Blob | null> {
   return new Promise((resolve) => {
     canvas.toBlob((blob) => resolve(blob), type, quality)
@@ -103,8 +113,8 @@ export async function resizeImage(file: File, maxDim: number = MAX_DIMENSION, ma
   const origW = decoded?.width ?? 1600
   const origH = decoded?.height ?? 1200
 
-  for (const dim of FALLBACK_DIMENSIONS) {
-    if (dim > maxDim) continue
+  const resizeDimensions = getResizeDimensions(maxDim)
+  for (const dim of resizeDimensions) {
     const { width, height } = getScaledDimensions(origW, origH, dim)
 
     const createMockCanvas = (w: number, h: number) =>
@@ -164,13 +174,14 @@ export async function resizeImage(file: File, maxDim: number = MAX_DIMENSION, ma
     debug(`!!! IMAGE_RESIZE both too big at dim=${dim}, trying smaller`)
   }
 
-  throw new Error(`Unable to resize within ${maxSize} bytes even at ${FALLBACK_DIMENSIONS[FALLBACK_DIMENSIONS.length - 1]}px`)
+  throw new Error(`Unable to resize within ${maxSize} bytes even at ${resizeDimensions[resizeDimensions.length - 1]}px`)
 }
 
 export const imageResizeUtils = {
   isImageFile,
   isFileSizeWithinLimit,
   getScaledDimensions,
+  getResizeDimensions,
   resizeImage,
   MAX_DIMENSION,
   MAX_FILE_SIZE,

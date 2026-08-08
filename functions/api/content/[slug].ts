@@ -76,6 +76,7 @@ export const onRequestGet: PagesFunction<Env> = async ({ params, env }) => {
         // in three components until the owner was given a field for it.
         site_name: (page as any).site_name ?? null,
         footer_tagline: (page as any).footer_tagline ?? null,
+        icon_url: (page as any).icon_url ?? null,
         sort_order: page.sort_order,
         is_published: page.is_published,
       },

@@ -33,6 +33,22 @@ function App() {
     if (tag) tag.setAttribute('content', description)
   }, [data?.page?.meta_description])
 
+  // The uploaded site icon is used both beside the public wordmark and as the
+  // browser-tab favicon. Keep a single managed <link> so refreshes and icon
+  // replacements update the existing tab rather than accumulating tags.
+  React.useEffect(() => {
+    const iconUrl = data?.page?.icon_url
+    if (!iconUrl) return
+    let icon = document.querySelector<HTMLLinkElement>('link[data-site-icon="true"]')
+    if (!icon) {
+      icon = document.createElement('link')
+      icon.rel = 'icon'
+      icon.dataset.siteIcon = 'true'
+      document.head.appendChild(icon)
+    }
+    icon.href = iconUrl
+  }, [data?.page?.icon_url])
+
   // Simple routing — no react-router needed for MVP
   if (path.startsWith('/health')) {
     return <Health />
