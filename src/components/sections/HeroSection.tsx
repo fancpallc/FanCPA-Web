@@ -8,9 +8,10 @@ export interface HeroSectionProps {
   items: SectionItem[]
   /** In-page anchors that exist on this render. Undefined means "not told" — show everything. */
   anchors?: Set<string>
+  bookingCtaVisible?: boolean
 }
 
-export function HeroSection({ section, items, anchors }: HeroSectionProps) {
+export function HeroSection({ section, items, anchors, bookingCtaVisible = true }: HeroSectionProps) {
   const first = items[0]
   // Never leave the page's primary button dead: if its configured target has been
   // hidden, fall back to booking, which is always on the page.
@@ -31,7 +32,7 @@ export function HeroSection({ section, items, anchors }: HeroSectionProps) {
           {section.subheading && <p className="text-xl text-gray-600 mb-6 leading-relaxed max-w-[60ch]">{section.subheading}</p>}
           {first?.body && <p className="text-gray-600 mb-8 leading-relaxed max-w-[60ch]">{first.body}</p>}
           <div className="flex gap-3 flex-wrap items-center">
-            {ctaHref && (
+            {ctaHref && (ctaHref !== '#calendar' || bookingCtaVisible) && (
               <a href={ctaHref} className="btn-primary">
                 {ctaText} <span aria-hidden>→</span>
               </a>

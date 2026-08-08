@@ -24,16 +24,16 @@ const ANCHOR_BY_TYPE: Record<string, string> = {
   'image-gallery': 'work',
 }
 
-function renderSection(section: Section, anchors: Set<string>) {
+function renderSection(section: Section, anchors: Set<string>, bookingCtaVisible: boolean) {
   const items = section.items || []
   switch (section.type) {
-    case 'hero': return <HeroSection key={section.id} section={section} items={items} anchors={anchors} />
+    case 'hero': return <HeroSection key={section.id} section={section} items={items} anchors={anchors} bookingCtaVisible={bookingCtaVisible} />
     // Each of these sections already carries its own anchor id — wrapping them in a
     // second element with the same id put two #about/#services nodes in the document.
     case 'cards-grid': return <CardsGrid key={section.id} section={section} items={items} />
-    case 'text-block': return <TextBlock key={section.id} section={section} items={items} anchors={anchors} />
+    case 'text-block': return <TextBlock key={section.id} section={section} items={items} anchors={anchors} bookingCtaVisible={bookingCtaVisible} />
     case 'testimonials': return <Testimonials key={section.id} section={section} items={items} />
-    case 'cta-banner': return <CTABanner key={section.id} section={section} items={items} anchors={anchors} />
+    case 'cta-banner': return <CTABanner key={section.id} section={section} items={items} anchors={anchors} bookingCtaVisible={bookingCtaVisible} />
     case 'image-gallery': return <ImageGallery key={section.id} section={section} items={items} />
     default: return null
   }
@@ -81,18 +81,20 @@ export function Home() {
   }
 
   const sections = data?.sections || []
-  const anchors = new Set(['calendar', 'contact', ...sections.map((s) => ANCHOR_BY_TYPE[s.type]).filter(Boolean)])
+  const calendarVisible = data?.page?.calendar_visible !== 0
+  const bookingCtaVisible = calendarVisible && data?.page?.booking_cta_visible !== 0
+  const anchors = new Set([...(calendarVisible ? ['calendar'] : []), 'contact', ...sections.map((s) => ANCHOR_BY_TYPE[s.type]).filter(Boolean)])
 
   return (
     <div>
-      {sections.length > 0 ? sections.map((s) => renderSection(s, anchors)) : (
+      {sections.length > 0 ? sections.map((s) => renderSection(s, anchors, bookingCtaVisible)) : (
         <div className="max-w-5xl mx-auto px-6 py-24 text-center">
           <h1 className="text-3xl font-black tracking-tight mb-3" style={{ fontFamily: 'Playfair Display, serif' }}>{data?.page?.title || 'Portfolio'}</h1>
           <p className="text-gray-600">Content is being prepared. Please check back soon.</p>
         </div>
       )}
 
-      <section id="calendar" className="py-20 lg:py-24 bg-slate-50 border-t">
+      {calendarVisible && <section id="calendar" className="py-20 lg:py-24 bg-slate-50 border-t">
         <div className="max-w-5xl mx-auto px-6">
           <div className="max-w-3xl mx-auto text-center mb-10">
             <h2 className="text-3xl lg:text-4xl font-black tracking-tight mb-4" style={{ fontFamily: 'Playfair Display, serif' }}>Book a meeting</h2>
@@ -205,7 +207,7 @@ export function Home() {
             </div>
           )}
         </div>
-      </section>
+      </section>}
 
       <ManageBookings />
     </div>

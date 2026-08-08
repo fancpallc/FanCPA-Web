@@ -25,6 +25,10 @@ export interface Page {
   footer_tagline?: string | null
   /** Optional icon/logo URL. */
   icon_url?: string | null
+  /** Whether visitors can book through the on-page calendar. */
+  calendar_visible?: number | null
+  /** Whether shared booking call-to-action buttons are shown. */
+  booking_cta_visible?: number | null
   sort_order: number
   is_published: number
 }
@@ -264,4 +268,3 @@ export async function createBooking(payload: BookingPayload, options: FetchOptio
     clearTimeout(timeout)
   }
 }
-

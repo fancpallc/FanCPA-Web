@@ -77,6 +77,8 @@ export const onRequestGet: PagesFunction<Env> = async ({ params, env }) => {
         site_name: (page as any).site_name ?? null,
         footer_tagline: (page as any).footer_tagline ?? null,
         icon_url: (page as any).icon_url ?? null,
+        calendar_visible: (page as any).calendar_visible ?? 1,
+        booking_cta_visible: (page as any).booking_cta_visible ?? 1,
         sort_order: page.sort_order,
         is_published: page.is_published,
       },

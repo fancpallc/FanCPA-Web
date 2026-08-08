@@ -17,7 +17,7 @@ function mockRequest(url: string, headers: Record<string, string> = {}) {
 
 describe('GET /api/admin/content — admin view all including hidden', () => {
   let mockD1: any
-  let mockPages = [{ id: 'page1', slug: 'home', title: 'Portfolio', meta_description: 'My portfolio', icon_url: '/api/images/portfolio/site-icon.png', sort_order: 0, is_published: 1 }]
+  let mockPages = [{ id: 'page1', slug: 'home', title: 'Portfolio', meta_description: 'My portfolio', icon_url: '/api/images/portfolio/site-icon.png', calendar_visible: 0, booking_cta_visible: 0, sort_order: 0, is_published: 1 }]
   let mockSections = [
     { id: 'sec1', page_id: 'page1', type: 'hero', heading: 'Welcome', subheading: 'Sub', sort_order: 0, config: '{"theme":"dark"}', is_visible: 1 },
     { id: 'sec_hidden', page_id: 'page1', type: 'text-block', heading: 'Hidden', sort_order: 1, config: '{}', is_visible: 0 },
@@ -91,6 +91,8 @@ describe('GET /api/admin/content — admin view all including hidden', () => {
     const json = (await res.json()) as any
     expect(json.page.slug).toBe('home')
     expect(json.page.icon_url).toBe('/api/images/portfolio/site-icon.png')
+    expect(json.page.calendar_visible).toBe(0)
+    expect(json.page.booking_cta_visible).toBe(0)
     // Should include hidden section
     expect(json.sections.length).toBe(2)
     const hiddenSec = json.sections.find((s: any) => s.id === 'sec_hidden')

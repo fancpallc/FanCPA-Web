@@ -8,6 +8,7 @@ export interface NavProps {
 export function Nav({ title = 'FAN CPA LLC' }: NavProps) {
   const { data } = useContent('home')
   const visibleTypes = new Set((data?.sections || []).map((s: any) => s.type))
+  const showBookingCta = data?.page?.calendar_visible !== 0 && data?.page?.booking_cta_visible !== 0
   const [menuOpen, setMenuOpen] = useState(false)
   const menuRef = useRef<HTMLDivElement>(null)
 
@@ -72,9 +73,11 @@ export function Nav({ title = 'FAN CPA LLC' }: NavProps) {
               {item.label}
                     </a>
                   ))}
-          <a href="#calendar" className="inline-flex items-center min-h-11 px-4 rounded-full bg-slate-900 text-white whitespace-nowrap">
-            Book a free call
-          </a>
+          {showBookingCta && (
+            <a href="#calendar" className="inline-flex items-center min-h-11 px-4 rounded-full bg-slate-900 text-white whitespace-nowrap">
+              Book a free call
+            </a>
+          )}
           {collapseOnMobile && (
             <div className="relative sm:hidden" ref={menuRef}>
               <button
@@ -107,4 +110,3 @@ export function Nav({ title = 'FAN CPA LLC' }: NavProps) {
     </header>
   )
 }
-

@@ -45,4 +45,16 @@ describe('HeroSection', () => {
     )
     expect(screen.getByText(/Title/)).toBeInTheDocument()
   })
+
+  it('does not replace a dead section link with a hidden calendar booking button', () => {
+    render(
+      <HeroSection
+        section={{ id: 'sec1', type: 'hero', heading: 'Title' } as any}
+        items={[{ id: 'i1', link_url: '#calendar', link_text: 'Schedule a meeting', sort_order: 0, is_visible: 1 } as any]}
+        anchors={new Set(['contact'])}
+        bookingCtaVisible={false}
+      />,
+    )
+    expect(screen.queryByRole('link', { name: /book a free call|schedule a meeting/i })).not.toBeInTheDocument()
+  })
 })
