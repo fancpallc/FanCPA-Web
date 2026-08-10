@@ -87,6 +87,18 @@ export function Admin() {
   const [newSectionType, setNewSectionType] = useState('text-block')
   const [newSectionHeading, setNewSectionHeading] = useState('')
   const [newSectionError, setNewSectionError] = useState<string | null>(null)
+  const [isCalendarVisible, setIsCalendarVisible] = useState(!!content.page?.is_calendar_visible)
+
+  const handleToggleCalendar = async () => {
+    const newValue = !isCalendarVisible
+    setIsCalendarVisible(newValue)
+    try {
+      await content.updatePage({ is_calendar_visible: newValue ? 1 : 0 } as any)
+    } catch (e: any) {
+      setGlobalError(e?.message)
+      setIsCalendarVisible(!newValue) // Revert on error
+    }
+  }
 
   const handleCheckQuota = async () => {
     setQuotaLoading(true)
@@ -226,7 +238,7 @@ export function Admin() {
   // Same set the live page builds, so the preview can warn when a button points at a
   // section the owner has hidden — the live site quietly swaps in a booking link.
   const liveAnchors = new Set([
-    'calendar',
+    ...(isCalendarVisible ? ['calendar'] : []),
     'contact',
     ...sortedSections.filter((s) => s.is_visible).map((s) => ANCHOR_BY_TYPE[s.type]).filter(Boolean),
   ])
@@ -249,6 +261,12 @@ export function Admin() {
           <div className="flex flex-wrap gap-2 items-center">
             <button onClick={handleCheckQuota} disabled={quotaLoading} className="px-3 min-h-11 inline-flex items-center bg-white border border-slate-500 rounded-full text-[11px] font-semibold hover:border-slate-900 disabled:opacity-50" aria-label="Check storage usage">
               {quotaLoading ? 'Checking…' : quota ? `Storage ${formatStorage(quota.totalMB)} of ${formatStorage(quota.limitMB)}` : 'Check storage'}
+            </button>
+            <button
+              onClick={() => setIsCalendarVisible(!isCalendarVisible)}
+              className={`px-3 min-h-11 inline-flex items-center border rounded-full text-[11px] font-semibold ${isCalendarVisible ? 'bg-white border-slate-500' : 'bg-amber-100 border-amber-200 text-amber-900'}`}
+            >
+              {isCalendarVisible ? 'Hide Calendar' : 'Show Calendar'}
             </button>
             <button onClick={() => { refetch(); content.refetch() }} className="px-3 min-h-11 inline-flex items-center bg-white border border-slate-500 rounded-full text-[11px] font-semibold hover:border-slate-900" aria-label="Reload content from the server" title="Reload content from the server">Refresh</button>
             <a href="/" className="px-3 min-h-11 inline-flex items-center bg-slate-900 text-white rounded-full text-[11px] font-semibold" aria-label="View site">View site</a>
@@ -614,28 +632,30 @@ export function Admin() {
               live replica would be a second set of controls that book nothing. The
               caption carries the meaning for screen readers; the replica below it is
               aria-hidden so it is not announced as a duplicate, dead form. */}
-          <div className="rounded-2xl border border-slate-200 bg-white shadow-sm overflow-hidden">
-            <div className="flex flex-wrap items-center justify-between gap-2 px-4 sm:px-6 py-3 border-b bg-slate-50">
-              <span className="px-3 py-1.5 rounded-full bg-slate-900 text-white text-[10px] tracking-wide shadow-sm border border-slate-800">
-                Booking · always on your live site
-              </span>
-              <span className="text-[11px] text-gray-600">
-                Preview only — your visitors book here. Times come from your Google Calendar, so there is nothing to edit.
-              </span>
-            </div>
-            <div className="pointer-events-none" aria-hidden>
-              <section className="py-20 lg:py-24 bg-slate-50 border-t">
-                <div className="max-w-5xl mx-auto px-6">
-                  <div className="max-w-3xl mx-auto text-center mb-10">
-                    <h2 className="text-3xl lg:text-4xl font-black tracking-tight mb-4" style={{ fontFamily: 'Playfair Display, serif' }}>Book a meeting</h2>
-                    <p className="text-gray-600 leading-relaxed">Pick a time that works for you. No pitch, just practical next steps.</p>
+          {isCalendarVisible && (
+            <div className="rounded-2xl border border-slate-200 bg-white shadow-sm overflow-hidden">
+              <div className="flex flex-wrap items-center justify-between gap-2 px-4 sm:px-6 py-3 border-b bg-slate-50">
+                <span className="px-3 py-1.5 rounded-full bg-slate-900 text-white text-[10px] tracking-wide shadow-sm border border-slate-800">
+                  Booking · always on your live site
+                </span>
+                <span className="text-[11px] text-gray-600">
+                  Preview only — your visitors book here. Times come from your Google Calendar, so there is nothing to edit.
+                </span>
+              </div>
+              <div className="pointer-events-none" aria-hidden>
+                <section className="py-20 lg:py-24 bg-slate-50 border-t">
+                  <div className="max-w-5xl mx-auto px-6">
+                    <div className="max-w-3xl mx-auto text-center mb-10">
+                      <h2 className="text-3xl lg:text-4xl font-black tracking-tight mb-4" style={{ fontFamily: 'Playfair Display, serif' }}>Book a meeting</h2>
+                      <p className="text-gray-600 leading-relaxed">Pick a time that works for you. No pitch, just practical next steps.</p>
+                    </div>
+                    <CalendarView grouped={calendarSlots} selectedDate={null} onDateSelect={() => {}} excludeToday={excludeToday} slotMinutes={slotMinutes} />
                   </div>
-                  <CalendarView grouped={calendarSlots} selectedDate={null} onDateSelect={() => {}} excludeToday={excludeToday} slotMinutes={slotMinutes} />
-                </div>
-              </section>
-              <ManageBookings />
+                </section>
+                <ManageBookings />
+              </div>
             </div>
-          </div>
+          )}
         </main>
       )}
     </div>

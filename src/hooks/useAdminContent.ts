@@ -39,6 +39,7 @@ export interface AdminPage {
   site_name?: string | null
   footer_tagline?: string | null
   icon_url?: string | null
+  is_calendar_visible?: number
 }
 
 export interface UseAdminContentReturn {
