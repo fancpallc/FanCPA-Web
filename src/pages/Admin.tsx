@@ -87,6 +87,7 @@ export function Admin() {
   const [newSectionType, setNewSectionType] = useState('text-block')
   const [newSectionHeading, setNewSectionHeading] = useState('')
   const [newSectionError, setNewSectionError] = useState<string | null>(null)
+  const isCalendarVisible = Boolean(content.page?.is_calendar_visible)
 
   const handleCheckQuota = async () => {
     setQuotaLoading(true)
@@ -226,7 +227,7 @@ export function Admin() {
   // Same set the live page builds, so the preview can warn when a button points at a
   // section the owner has hidden — the live site quietly swaps in a booking link.
   const liveAnchors = new Set([
-    'calendar',
+    ...(isCalendarVisible ? ['calendar'] : []),
     'contact',
     ...sortedSections.filter((s) => s.is_visible).map((s) => ANCHOR_BY_TYPE[s.type]).filter(Boolean),
   ])
@@ -614,27 +615,40 @@ export function Admin() {
               live replica would be a second set of controls that book nothing. The
               caption carries the meaning for screen readers; the replica below it is
               aria-hidden so it is not announced as a duplicate, dead form. */}
-          <div className="rounded-2xl border border-slate-200 bg-white shadow-sm overflow-hidden">
+          <div className={`relative rounded-2xl border bg-white shadow-sm overflow-hidden ${!isCalendarVisible ? 'border-dashed border-amber-300' : 'border-slate-200'}`}>
             <div className="flex flex-wrap items-center justify-between gap-2 px-4 sm:px-6 py-3 border-b bg-slate-50">
-              <span className="px-3 py-1.5 rounded-full bg-slate-900 text-white text-[10px] tracking-wide shadow-sm border border-slate-800">
-                Booking · always on your live site
-              </span>
-              <span className="text-[11px] text-gray-600">
-                Preview only — your visitors book here. Times come from your Google Calendar, so there is nothing to edit.
-              </span>
+              <div className="flex flex-wrap items-center gap-2">
+                <span className="px-3 py-1.5 rounded-full bg-slate-900 text-white text-[10px] tracking-wide shadow-sm border border-slate-800">
+                  Booking Calendar
+                </span>
+                {!isCalendarVisible && (
+                  <span className="px-3 py-1.5 rounded-full bg-amber-100 text-amber-800 border border-amber-200 text-[10px] shadow-sm">
+                    Hidden — not on live site
+                  </span>
+                )}
+              </div>
+              <div className="flex flex-wrap items-center justify-end gap-2">
+                <button aria-label="Show/Hide booking calendar" onClick={async () => {
+                    try { await content.updatePage({ is_calendar_visible: isCalendarVisible ? 0 : 1 }) } catch (e: any) { setGlobalError(e?.message) }
+                }} className="px-3 min-h-11 inline-flex items-center justify-center bg-white border border-slate-500 rounded-full text-[11px] hover:border-slate-900">
+                  {isCalendarVisible ? 'Hide' : 'Show'}
+                </button>
+              </div>
             </div>
-            <div className="pointer-events-none" aria-hidden>
-              <section className="py-20 lg:py-24 bg-slate-50 border-t">
-                <div className="max-w-5xl mx-auto px-6">
-                  <div className="max-w-3xl mx-auto text-center mb-10">
-                    <h2 className="text-3xl lg:text-4xl font-black tracking-tight mb-4" style={{ fontFamily: 'Playfair Display, serif' }}>Book a meeting</h2>
-                    <p className="text-gray-600 leading-relaxed">Pick a time that works for you. No pitch, just practical next steps.</p>
+            {isCalendarVisible && (
+              <div className="pointer-events-none" aria-hidden>
+                <section className="py-20 lg:py-24 bg-slate-50 border-t">
+                  <div className="max-w-5xl mx-auto px-6">
+                    <div className="max-w-3xl mx-auto text-center mb-10">
+                      <h2 className="text-3xl lg:text-4xl font-black tracking-tight mb-4" style={{ fontFamily: 'Playfair Display, serif' }}>Book a meeting</h2>
+                      <p className="text-gray-600 leading-relaxed">Pick a time that works for you. No pitch, just practical next steps.</p>
+                    </div>
+                    <CalendarView grouped={calendarSlots} selectedDate={null} onDateSelect={() => {}} excludeToday={excludeToday} slotMinutes={slotMinutes} />
                   </div>
-                  <CalendarView grouped={calendarSlots} selectedDate={null} onDateSelect={() => {}} excludeToday={excludeToday} slotMinutes={slotMinutes} />
-                </div>
-              </section>
-              <ManageBookings />
-            </div>
+                </section>
+                <ManageBookings />
+              </div>
+          )}
           </div>
         </main>
       )}
