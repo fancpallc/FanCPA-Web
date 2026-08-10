@@ -87,18 +87,7 @@ export function Admin() {
   const [newSectionType, setNewSectionType] = useState('text-block')
   const [newSectionHeading, setNewSectionHeading] = useState('')
   const [newSectionError, setNewSectionError] = useState<string | null>(null)
-  const [isCalendarVisible, setIsCalendarVisible] = useState(!!content.page?.is_calendar_visible)
-
-  const handleToggleCalendar = async () => {
-    const newValue = !isCalendarVisible
-    setIsCalendarVisible(newValue)
-    try {
-      await content.updatePage({ is_calendar_visible: newValue ? 1 : 0 } as any)
-    } catch (e: any) {
-      setGlobalError(e?.message)
-      setIsCalendarVisible(!newValue) // Revert on error
-    }
-  }
+  const isCalendarVisible = Boolean(content.page?.is_calendar_visible)
 
   const handleCheckQuota = async () => {
     setQuotaLoading(true)
@@ -261,12 +250,6 @@ export function Admin() {
           <div className="flex flex-wrap gap-2 items-center">
             <button onClick={handleCheckQuota} disabled={quotaLoading} className="px-3 min-h-11 inline-flex items-center bg-white border border-slate-500 rounded-full text-[11px] font-semibold hover:border-slate-900 disabled:opacity-50" aria-label="Check storage usage">
               {quotaLoading ? 'Checking…' : quota ? `Storage ${formatStorage(quota.totalMB)} of ${formatStorage(quota.limitMB)}` : 'Check storage'}
-            </button>
-            <button
-              onClick={handleToggleCalendar}
-              className={`px-3 min-h-11 inline-flex items-center border rounded-full text-[11px] font-semibold ${isCalendarVisible ? 'bg-white border-slate-500' : 'bg-amber-100 border-amber-200 text-amber-900'}`}
-            >
-              {isCalendarVisible ? 'Hide Calendar' : 'Show Calendar'}
             </button>
             <button onClick={() => { refetch(); content.refetch() }} className="px-3 min-h-11 inline-flex items-center bg-white border border-slate-500 rounded-full text-[11px] font-semibold hover:border-slate-900" aria-label="Reload content from the server" title="Reload content from the server">Refresh</button>
             <a href="/" className="px-3 min-h-11 inline-flex items-center bg-slate-900 text-white rounded-full text-[11px] font-semibold" aria-label="View site">View site</a>
@@ -632,16 +615,27 @@ export function Admin() {
               live replica would be a second set of controls that book nothing. The
               caption carries the meaning for screen readers; the replica below it is
               aria-hidden so it is not announced as a duplicate, dead form. */}
-          {isCalendarVisible && (
-            <div className="rounded-2xl border border-slate-200 bg-white shadow-sm overflow-hidden">
-              <div className="flex flex-wrap items-center justify-between gap-2 px-4 sm:px-6 py-3 border-b bg-slate-50">
+          <div className={`relative rounded-2xl border bg-white shadow-sm overflow-hidden ${!isCalendarVisible ? 'border-dashed border-amber-300' : 'border-slate-200'}`}>
+            <div className="flex flex-wrap items-center justify-between gap-2 px-4 sm:px-6 py-3 border-b bg-slate-50">
+              <div className="flex flex-wrap items-center gap-2">
                 <span className="px-3 py-1.5 rounded-full bg-slate-900 text-white text-[10px] tracking-wide shadow-sm border border-slate-800">
-                  Booking · always on your live site
+                  Booking Calendar
                 </span>
-                <span className="text-[11px] text-gray-600">
-                  Preview only — your visitors book here. Times come from your Google Calendar, so there is nothing to edit.
-                </span>
+                {!isCalendarVisible && (
+                  <span className="px-3 py-1.5 rounded-full bg-amber-100 text-amber-800 border border-amber-200 text-[10px] shadow-sm">
+                    Hidden — not on live site
+                  </span>
+                )}
               </div>
+              <div className="flex flex-wrap items-center justify-end gap-2">
+                <button aria-label="Show/Hide booking calendar" onClick={async () => {
+                    try { await content.updatePage({ is_calendar_visible: isCalendarVisible ? 0 : 1 }) } catch (e: any) { setGlobalError(e?.message) }
+                }} className="px-3 min-h-11 inline-flex items-center justify-center bg-white border border-slate-500 rounded-full text-[11px] hover:border-slate-900">
+                  {isCalendarVisible ? 'Hide' : 'Show'}
+                </button>
+              </div>
+            </div>
+            {isCalendarVisible && (
               <div className="pointer-events-none" aria-hidden>
                 <section className="py-20 lg:py-24 bg-slate-50 border-t">
                   <div className="max-w-5xl mx-auto px-6">
@@ -654,8 +648,8 @@ export function Admin() {
                 </section>
                 <ManageBookings />
               </div>
-            </div>
           )}
+          </div>
         </main>
       )}
     </div>

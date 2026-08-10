@@ -70,11 +70,9 @@ export function Nav({ title = 'FAN CPA LLC' }: NavProps) {
           {sectionLinks.map((item) => (
             <a key={item.href} href={item.href} className={`${collapseOnMobile ? 'hidden sm:inline-flex' : 'inline-flex'} hover:underline focus:outline-none focus:underline items-center min-h-11 px-1`}>
               {item.label}
-                    </a>
-                  ))}
-          <a href="#calendar" className="inline-flex items-center min-h-11 px-4 rounded-full bg-slate-900 text-white whitespace-nowrap">
-            Book a free call
           </a>
+          ))}
+          {/* Calendar link removed from Nav as per requirement 1 */}
           {collapseOnMobile && (
             <div className="relative sm:hidden" ref={menuRef}>
               <button

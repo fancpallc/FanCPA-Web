@@ -45,6 +45,7 @@ export function Home() {
   const [selectedDate, setSelectedDate] = useState<string | null>(null)
   const [selectedSlot, setSelectedSlot] = useState<any>(null)
   const [bookingResult, setBookingResult] = useState<{ meetLink: string; dateTime: string; cancelUrl: string; source?: string; gcalError?: string; emailResult?: any; purpose?: string | null } | null>(null)
+  const [isCalendarOpen, setIsCalendarOpen] = useState(false)
 
   const selectedSlots = useMemo(() => {
     if (!selectedDate) return []
@@ -95,115 +96,131 @@ export function Home() {
       {(data?.page as any)?.is_calendar_visible !== false && (
         <section id="calendar" className="py-20 lg:py-24 bg-slate-50 border-t">
           <div className="max-w-5xl mx-auto px-6">
-            <div className="max-w-3xl mx-auto text-center mb-10">
-              <h2 className="text-3xl lg:text-4xl font-black tracking-tight mb-4" style={{ fontFamily: 'Playfair Display, serif' }}>Book a meeting</h2>
-              {/* The calendar itself states the slot length, timezone and booking window —
-                  repeating them here read as five copies of the same sentence. */}
-              <p className="text-gray-600 leading-relaxed">Pick a time that works for you. No pitch, just practical next steps.</p>
-            </div>
-
-            {calLoading ? (
-              <div className="max-w-md mx-auto text-center py-8">
-                <div className="animate-pulse text-sm text-gray-500">Loading calendar…</div>
+            <div className="flex flex-col sm:flex-row justify-between items-center mb-10 gap-4">
+              <div className="text-center sm:text-left">
+                <h2 className="text-3xl lg:text-4xl font-black tracking-tight mb-2" style={{ fontFamily: 'Playfair Display, serif' }}>Book a meeting</h2>
+                <p className="text-gray-600">Pick a time that works for you. No pitch, just practical next steps.</p>
               </div>
-            ) : calError ? (
-              <div className="max-w-md mx-auto border border-red-200 bg-red-50 rounded-xl p-4 text-center text-sm text-red-700">
-                Calendar unavailable
-              </div>
-            ) : (
-              <div className="w-full">
-                <CalendarView
-                  grouped={grouped}
-                  selectedDate={selectedDate}
-                  onDateSelect={(d) => {
-                    setSelectedDate(d)
-                    setSelectedSlot(null)
-                    setBookingResult(null)
-                    // The times open below the fold on a desktop viewport, which read as
-                    // "clicking the day did nothing".
-                    requestAnimationFrame(() =>
-                      document.getElementById('slot-picker')?.scrollIntoView({ behavior: 'smooth', block: 'nearest' }),
-                    )
-                  }}
-                  excludeToday={excludeToday}
-                  slotMinutes={slotMinutes}
-                />
-                {/* Full width, sharing the calendar card's edges — a narrower centred panel
-                    left a step against the card above it. */}
-                <div id="slot-picker" className="mt-8 w-full space-y-6">
-                  {selectedDate && !selectedSlot && !bookingResult && (
-                    <SlotPicker date={selectedDate} slots={selectedSlots} onSlotSelect={(slot) => setSelectedSlot(slot)} onClose={() => { setSelectedDate(null); setSelectedSlot(null) }} slotMinutes={slotMinutes} />
-                  )}
-                  {!selectedDate && !bookingResult && (
-                    <div className="text-center text-sm text-gray-500 py-4">
-                      Select a day above to see its available times.
-                    </div>
-                  )}
-                  {selectedSlot && !bookingResult && (
-                    <BookingForm
-                      slot={selectedSlot}
-                      onSuccess={(result) => {
-                        debug(`!!! HOME_BOOKING_SUCCESS slot=${selectedSlot.start} removing optimistic + refetching calendar with cache bust`)
-                        // The visitor sees plain-English copy; the vendor's own wording is
-                        // only useful to whoever has to fix the integration.
-                        if (result.gcalError) debug(`!!! HOME_BOOKING_GCAL_ERROR ${result.gcalError}`)
-                        if (result.emailResult && !result.emailResult.success) debug(`!!! HOME_BOOKING_EMAIL_ERROR ${result.emailResult.error}`)
-                        setBookingResult(result)
-                        // Optimistic removal so slot disappears immediately without reload
-                        removeSlot(selectedSlot)
-                        // Refetch with cache bust + short delay for Google FreeBusy propagation
-                        refetchCalendar()
-                        setTimeout(() => {
-                          debug('!!! HOME_BOOKING_REFETCH_DELAYED for Google propagation')
-                          refetchCalendar()
-                        }, 2000)
-                      }}
-                      onCancel={() => { setSelectedSlot(null); }}
-                    />
-                  )}
-                  {bookingResult && (
-                    <div className="card rounded-2xl p-6 bg-green-50 border-green-300 text-center">
-                      <h3 className="font-black text-xl mb-3">Meeting Confirmed ✅</h3>
-                      <p className="text-sm mb-2">{bookingResult.dateTime}</p>
-                      {bookingResult.purpose && <p className="text-sm mb-2">Purpose: <strong>{bookingResult.purpose}</strong></p>}
-                      <p className="text-sm mb-2">Meet: <a href={bookingResult.meetLink} target="_blank" rel="noopener noreferrer" className="underline">{bookingResult.meetLink}</a></p>
-                      {/* The vendor's own error string used to be printed here verbatim, so a
-                          delivery failure showed the visitor Resend's developer documentation
-                          and the calendar stub told them to check /api/debug/diag. The raw
-                          text goes to the DEV console instead. */}
-                      {isPlaceholderMeetLink(bookingResult.meetLink) && (
-                        <div className="mx-auto max-w-md p-3 border border-amber-300 bg-amber-50 rounded-lg text-xs text-amber-800 mb-3 text-left">
-                          <div className="font-semibold">{BOOKING_MESSAGES.placeholderMeetLink.heading}</div>
-                          <div>{BOOKING_MESSAGES.placeholderMeetLink.detail}</div>
-                        </div>
-                      )}
-                      {bookingResult.emailResult && !bookingResult.emailResult.success && (
-                        <div className="mx-auto max-w-md p-3 border border-orange-300 bg-orange-50 rounded-lg text-xs text-orange-800 mb-3 text-left">
-                          <div className="font-semibold">{BOOKING_MESSAGES.emailNotSent.heading}</div>
-                          <div>{BOOKING_MESSAGES.emailNotSent.detail}</div>
-                        </div>
-                      )}
-                      {/* Saying nothing when the email did go out leaves the visitor
-                          wondering whether to expect one. */}
-                      {bookingResult.emailResult?.success && bookingResult.emailResult.source === 'live' && (
-                        <p className="text-xs text-green-800 mb-3">A confirmation email is on its way.</p>
-                      )}
-                      <div className="flex gap-3 justify-center flex-wrap">
-                        <button onClick={() => { const ics = generateIcsContent({ title: `Meeting — ${bookingResult.dateTime}`, description: `Meet: ${bookingResult.meetLink}\nCancel: ${bookingResult.cancelUrl}`, location: bookingResult.meetLink, start: selectedSlot?.start || new Date().toISOString(), end: selectedSlot?.end || new Date().toISOString(), meetLink: bookingResult.meetLink }); downloadIcsFile(ics, `meeting-${selectedDate}.ics`); }} className="px-6 py-3 bg-slate-900 text-white rounded-full text-sm font-semibold hover:bg-black leading-none">
-                          Download invite (.ics)
-                        </button>
-                        <a href={bookingResult.cancelUrl} className="px-6 py-3 rounded-full border border-red-600 bg-white text-red-700 text-sm font-semibold hover:bg-red-50 leading-none inline-flex items-center justify-center">
-                          Cancel meeting
-                        </a>
-                      </div>
-                      <div className="flex gap-3 justify-center flex-wrap mt-4">
-                        <button onClick={() => { debug('!!! HOME_BOOK_ANOTHER clear + refetch'); setSelectedDate(null); setSelectedSlot(null); setBookingResult(null); refetchCalendar(); }} className="px-6 py-3 bg-black text-white rounded-full text-sm font-semibold leading-none">Book another</button>
-                        <a href={bookingResult.meetLink} target="_blank" rel="noopener noreferrer" className="px-6 py-3 bg-white border border-slate-500 rounded-full text-sm font-semibold leading-none inline-flex items-center justify-center">Open Meet →</a>
-                      </div>
-                    </div>
-                )}
+              <div className="flex items-center gap-2">
+                <button
+                  onClick={() => setIsCalendarOpen(!isCalendarOpen)}
+                  className="px-4 py-2 bg-white border border-slate-300 rounded-full text-sm font-semibold hover:bg-slate-100"
+                >
+                  {isCalendarOpen ? 'Hide Calendar' : 'Show Calendar'}
+                </button>
+                <div className="flex flex-col gap-0.5">
+                  <button className="p-1 border border-slate-300 rounded hover:bg-slate-100 leading-none">▲</button>
+                  <button className="p-1 border border-slate-300 rounded hover:bg-slate-100 leading-none">▼</button>
                 </div>
               </div>
+            </div>
+
+            {isCalendarOpen && (
+              <>
+                {calLoading ? (
+                  <div className="max-w-md mx-auto text-center py-8">
+                    <div className="animate-pulse text-sm text-gray-500">Loading calendar…</div>
+                  </div>
+                ) : calError ? (
+                  <div className="max-w-md mx-auto border border-red-200 bg-red-50 rounded-xl p-4 text-center text-sm text-red-700">
+                    Calendar unavailable
+                  </div>
+                ) : (
+                  <div className="w-full">
+                    <CalendarView
+                      grouped={grouped}
+                      selectedDate={selectedDate}
+                      onDateSelect={(d) => {
+                        setSelectedDate(d)
+                        setSelectedSlot(null)
+                        setBookingResult(null)
+                        // The times open below the fold on a desktop viewport, which read as
+                        // "clicking the day did nothing".
+                        requestAnimationFrame(() =>
+                          document.getElementById('slot-picker')?.scrollIntoView({ behavior: 'smooth', block: 'nearest' }),
+                        )
+                      }}
+                      excludeToday={excludeToday}
+                      slotMinutes={slotMinutes}
+                    />
+                    {/* Full width, sharing the calendar card's edges — a narrower centred panel
+                        left a step against the card above it. */}
+                    <div id="slot-picker" className="mt-8 w-full space-y-6">
+                      {selectedDate && !selectedSlot && !bookingResult && (
+                        <SlotPicker date={selectedDate} slots={selectedSlots} onSlotSelect={(slot) => setSelectedSlot(slot)} onClose={() => { setSelectedDate(null); setSelectedSlot(null) }} slotMinutes={slotMinutes} />
+                      )}
+                      {!selectedDate && !bookingResult && (
+                        <div className="text-center text-sm text-gray-500 py-4">
+                          Select a day above to see its available times.
+                        </div>
+                      )}
+                      {selectedSlot && !bookingResult && (
+                        <BookingForm
+                          slot={selectedSlot}
+                          onSuccess={(result) => {
+                            debug(`!!! HOME_BOOKING_SUCCESS slot=${selectedSlot.start} removing optimistic + refetching calendar with cache bust`)
+                            // The visitor sees plain-English copy; the vendor's own wording is
+                            // only useful to whoever has to fix the integration.
+                            if (result.gcalError) debug(`!!! HOME_BOOKING_GCAL_ERROR ${result.gcalError}`)
+                            if (result.emailResult && !result.emailResult.success) debug(`!!! HOME_BOOKING_EMAIL_ERROR ${result.emailResult.error}`)
+                            setBookingResult(result)
+                            // Optimistic removal so slot disappears immediately without reload
+                            removeSlot(selectedSlot)
+                            // Refetch with cache bust + short delay for Google FreeBusy propagation
+                            refetchCalendar()
+                            setTimeout(() => {
+                              debug('!!! HOME_BOOKING_REFETCH_DELAYED for Google propagation')
+                              refetchCalendar()
+                            }, 2000)
+                          }}
+                          onCancel={() => { setSelectedSlot(null); }}
+                        />
+                      )}
+                      {bookingResult && (
+                        <div className="card rounded-2xl p-6 bg-green-50 border-green-300 text-center">
+                          <h3 className="font-black text-xl mb-3">Meeting Confirmed ✅</h3>
+                          <p className="text-sm mb-2">{bookingResult.dateTime}</p>
+                          {bookingResult.purpose && <p className="text-sm mb-2">Purpose: <strong>{bookingResult.purpose}</strong></p>}
+                          <p className="text-sm mb-2">Meet: <a href={bookingResult.meetLink} target="_blank" rel="noopener noreferrer" className="underline">{bookingResult.meetLink}</a></p>
+                          {/* The vendor's own error string used to be printed here verbatim, so a
+                              delivery failure showed the visitor Resend's developer documentation
+                              and the calendar stub told them to check /api/debug/diag. The raw
+                              text goes to the DEV console instead. */}
+                          {isPlaceholderMeetLink(bookingResult.meetLink) && (
+                            <div className="mx-auto max-w-md p-3 border border-amber-300 bg-amber-50 rounded-lg text-xs text-amber-800 mb-3 text-left">
+                              <div className="font-semibold">{BOOKING_MESSAGES.placeholderMeetLink.heading}</div>
+                              <div>{BOOKING_MESSAGES.placeholderMeetLink.detail}</div>
+                            </div>
+                          )}
+                          {bookingResult.emailResult && !bookingResult.emailResult.success && (
+                            <div className="mx-auto max-w-md p-3 border border-orange-300 bg-orange-50 rounded-lg text-xs text-orange-800 mb-3 text-left">
+                              <div className="font-semibold">{BOOKING_MESSAGES.emailNotSent.heading}</div>
+                              <div>{BOOKING_MESSAGES.emailNotSent.detail}</div>
+                            </div>
+                          )}
+                          {/* Saying nothing when the email did go out leaves the visitor
+                              wondering whether to expect one. */}
+                          {bookingResult.emailResult?.success && bookingResult.emailResult.source === 'live' && (
+                            <p className="text-xs text-green-800 mb-3">A confirmation email is on its way.</p>
+                          )}
+                          <div className="flex gap-3 justify-center flex-wrap">
+                            <button onClick={() => { const ics = generateIcsContent({ title: `Meeting — ${bookingResult.dateTime}`, description: `Meet: ${bookingResult.meetLink}\nCancel: ${bookingResult.cancelUrl}`, location: bookingResult.meetLink, start: selectedSlot?.start || new Date().toISOString(), end: selectedSlot?.end || new Date().toISOString(), meetLink: bookingResult.meetLink }); downloadIcsFile(ics, `meeting-${selectedDate}.ics`); }} className="px-6 py-3 bg-slate-900 text-white rounded-full text-sm font-semibold hover:bg-black leading-none">
+                              Download invite (.ics)
+                            </button>
+                            <a href={bookingResult.cancelUrl} className="px-6 py-3 rounded-full border border-red-600 bg-white text-red-700 text-sm font-semibold hover:bg-red-50 leading-none inline-flex items-center justify-center">
+                              Cancel meeting
+                            </a>
+                          </div>
+                          <div className="flex gap-3 justify-center flex-wrap mt-4">
+                            <button onClick={() => { debug('!!! HOME_BOOK_ANOTHER clear + refetch'); setSelectedDate(null); setSelectedSlot(null); setBookingResult(null); refetchCalendar(); }} className="px-6 py-3 bg-black text-white rounded-full text-sm font-semibold leading-none">Book another</button>
+                            <a href={bookingResult.meetLink} target="_blank" rel="noopener noreferrer" className="px-6 py-3 bg-white border border-slate-500 rounded-full text-sm font-semibold leading-none inline-flex items-center justify-center">Open Meet →</a>
+                          </div>
+                        </div>
+                    )}
+                    </div>
+                  </div>
+                )}
+              </>
             )}
           </div>
         </section>
