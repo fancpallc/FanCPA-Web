@@ -263,7 +263,7 @@ export function Admin() {
               {quotaLoading ? 'Checking…' : quota ? `Storage ${formatStorage(quota.totalMB)} of ${formatStorage(quota.limitMB)}` : 'Check storage'}
             </button>
             <button
-              onClick={() => setIsCalendarVisible(!isCalendarVisible)}
+              onClick={handleToggleCalendar}
               className={`px-3 min-h-11 inline-flex items-center border rounded-full text-[11px] font-semibold ${isCalendarVisible ? 'bg-white border-slate-500' : 'bg-amber-100 border-amber-200 text-amber-900'}`}
             >
               {isCalendarVisible ? 'Hide Calendar' : 'Show Calendar'}
