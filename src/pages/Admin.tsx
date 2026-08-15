@@ -81,6 +81,7 @@ export function Admin() {
   const content = useAdminContent()
   // Only for the read-only booking preview below — the admin does not edit slots.
   const { grouped: calendarSlots, slotMinutes, excludeToday } = useCalendar(2)
+  const [timeZone, setTimeZone] = useState('America/New_York') // Default for admin preview
   const [quota, setQuota] = useState<any>(null)
   const [quotaLoading, setQuotaLoading] = useState(false)
   const [globalError, setGlobalError] = useState<string | null>(null)
@@ -630,7 +631,7 @@ export function Admin() {
                     <h2 className="text-3xl lg:text-4xl font-black tracking-tight mb-4" style={{ fontFamily: 'Playfair Display, serif' }}>Book a meeting</h2>
                     <p className="text-gray-600 leading-relaxed">Pick a time that works for you. No pitch, just practical next steps.</p>
                   </div>
-                  <CalendarView grouped={calendarSlots} selectedDate={null} onDateSelect={() => {}} excludeToday={excludeToday} slotMinutes={slotMinutes} />
+                  <CalendarView grouped={calendarSlots} selectedDate={null} onDateSelect={() => {}} excludeToday={excludeToday} slotMinutes={slotMinutes} timeZone={timeZone} setTimeZone={setTimeZone} />
                 </div>
               </section>
               <ManageBookings />
