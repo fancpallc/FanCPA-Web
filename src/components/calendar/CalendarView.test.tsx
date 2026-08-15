@@ -8,7 +8,7 @@ describe('CalendarView', () => {
       '2026-07-20': [{ date: '2026-07-20', start: '2026-07-20T09:00:00Z', end: '2026-07-20T09:30:00Z', available: true }],
     } as any
 
-    render(<CalendarView grouped={grouped} selectedDate={null} onDateSelect={vi.fn()} excludeToday={false} slotMinutes={30} />)
+    render(<CalendarView grouped={grouped} selectedDate={null} onDateSelect={vi.fn()} excludeToday={false} slotMinutes={30} timeZone="America/New_York" setTimeZone={vi.fn()} />)
     expect(screen.getByText(/next two weeks/i)).toBeInTheDocument()
     // Weekday header has Sun first and Sat last (header row)
     const headerRow = document.querySelector('.grid.grid-cols-7')
@@ -23,7 +23,7 @@ describe('CalendarView', () => {
   it('should place every day under its own weekday column', () => {
     // The grid used to be built with local-time arithmetic and rendered in Eastern
     // time, so "SAT 1 Aug" landed under the "SUN" header for anyone west of Eastern.
-    render(<CalendarView grouped={{} as any} selectedDate={null} onDateSelect={vi.fn()} excludeToday={false} slotMinutes={30} />)
+    render(<CalendarView grouped={{} as any} selectedDate={null} onDateSelect={vi.fn()} excludeToday={false} slotMinutes={30} timeZone="America/New_York" setTimeZone={vi.fn()} />)
     const headers = [...document.querySelectorAll('.grid.grid-cols-7')[0].children].map((el) => el.textContent!.trim().toUpperCase())
     const cells = [...document.querySelectorAll('button[aria-label]')]
     expect(cells.length).toBeGreaterThanOrEqual(14)
@@ -42,7 +42,7 @@ describe('CalendarView', () => {
     const dateStr = dayAfterTomorrow.toISOString().slice(0, 10)
     const grouped = { [dateStr]: [{ date: dateStr, start: `${dateStr}T13:00:00Z`, end: `${dateStr}T13:30:00Z`, available: true }] } as any
 
-    render(<CalendarView grouped={grouped} selectedDate={null} onDateSelect={vi.fn()} excludeToday={true} slotMinutes={30} />)
+    render(<CalendarView grouped={grouped} selectedDate={null} onDateSelect={vi.fn()} excludeToday={true} slotMinutes={30} timeZone="America/New_York" setTimeZone={vi.fn()} />)
 
     const expected = dayAfterTomorrow.toLocaleDateString('en-US', { timeZone: 'UTC', weekday: 'long', month: 'long', day: 'numeric' })
     expect(screen.getByText(`First opening: ${expected}`)).toBeInTheDocument()
@@ -50,7 +50,7 @@ describe('CalendarView', () => {
   })
 
   it('shows no opening badge at all when nothing is bookable', () => {
-    render(<CalendarView grouped={{} as any} selectedDate={null} onDateSelect={vi.fn()} excludeToday={true} slotMinutes={30} />)
+    render(<CalendarView grouped={{} as any} selectedDate={null} onDateSelect={vi.fn()} excludeToday={true} slotMinutes={30} timeZone="America/New_York" setTimeZone={vi.fn()} />)
     expect(screen.queryByText(/First opening/i)).not.toBeInTheDocument()
   })
 
@@ -59,8 +59,9 @@ describe('CalendarView', () => {
       '2026-07-20': [{ date: '2026-07-20', start: '2026-07-20T09:00:00Z', end: '2026-07-20T09:30:00Z', available: true }],
     } as any
 
-    render(<CalendarView grouped={grouped} selectedDate="2026-07-20" onDateSelect={vi.fn()} excludeToday={false} slotMinutes={30} />)
+    render(<CalendarView grouped={grouped} selectedDate="2026-07-20" onDateSelect={vi.fn()} excludeToday={false} slotMinutes={30} timeZone="America/New_York" setTimeZone={vi.fn()} />)
     const selected = document.querySelector('[aria-selected="true"]')
     expect(document.body.innerHTML.length).toBeGreaterThan(0)
   })
 })
+

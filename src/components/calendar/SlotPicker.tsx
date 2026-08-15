@@ -1,7 +1,7 @@
 import React, { useMemo } from 'react'
 import type { CalendarSlot } from '../../lib/api'
-import { TIMEZONE } from '../../lib/constants'
 import { formatSlotInterval } from '../../lib/datetime'
+import { COMMON_TIMEZONES } from '../../lib/timezones'
 
 export interface SlotPickerProps {
   date: string
@@ -9,6 +9,8 @@ export interface SlotPickerProps {
   onSlotSelect: (slot: CalendarSlot) => void
   onClose?: () => void
   slotMinutes?: number
+  timeZone: string
+  setTimeZone: (tz: string) => void
 }
 
 function formatDateLong(dateStr: string): string {
@@ -29,20 +31,20 @@ function formatDateLong(dateStr: string): string {
   }
 }
 
-export function SlotPicker({ date, slots, onSlotSelect, onClose, slotMinutes = 30 }: SlotPickerProps) {
+export function SlotPicker({ date, slots, onSlotSelect, onClose, slotMinutes = 30, timeZone, setTimeZone }: SlotPickerProps) {
   const { morning, afternoon, availableCount } = useMemo(() => {
     const available = slots.filter((s) => s.available)
     const morning: CalendarSlot[] = []
     const afternoon: CalendarSlot[] = []
     available.forEach((s) => {
       // Display grouping in Eastern timezone hours
-      const hour = new Date(s.start).toLocaleString('en-US', { hour: 'numeric', hour12: false, timeZone: TIMEZONE }) as any
+      const hour = new Date(s.start).toLocaleString('en-US', { hour: 'numeric', hour12: false, timeZone: timeZone }) as any
       const h = parseInt(String(hour), 10)
       if (h < 12) morning.push(s)
       else afternoon.push(s)
     })
     return { morning, afternoon, availableCount: available.length }
-  }, [slots])
+  }, [slots, timeZone])
 
   if (!slots || slots.length === 0) {
     return (
@@ -64,14 +66,29 @@ export function SlotPicker({ date, slots, onSlotSelect, onClose, slotMinutes = 3
       <div className="flex justify-between items-start gap-3 mb-5">
         <div>
           <div className="font-bold text-base tracking-tight">{formatDateLong(date)}</div>
-          <div className="text-xs text-gray-500 mt-1">{availableCount} times available · {slotMinutes} minutes each</div>
+          <div className="text-xs text-gray-500 mt-1">
+            {availableCount} times available · {slotMinutes} minutes each
+          </div>
+          <div className="mt-2">
+            <select
+              value={timeZone}
+              onChange={(e) => setTimeZone(e.target.value)}
+              className="text-xs font-semibold border-none bg-gray-100 rounded-full px-2 py-1 focus:ring-0 cursor-pointer text-slate-900"
+            >
+              {COMMON_TIMEZONES.map((tz) => (
+                <option key={tz.value} value={tz.value}>
+                  {tz.label}
+                </option>
+              ))}
+            </select>
+          </div>
         </div>
         {onClose && (
           <button onClick={onClose} aria-label="Close time slots" className="w-11 h-11 rounded-full border border-slate-500 bg-white text-gray-600 hover:bg-gray-50 flex items-center justify-center text-sm focus:outline-none focus:ring-2">
             ✕
-          </button>
+                  </button>
         )}
-      </div>
+              </div>
 
       {availableCount === 0 ? (
         <div className="text-sm text-gray-500 py-4 text-center">
@@ -94,7 +111,7 @@ export function SlotPicker({ date, slots, onSlotSelect, onClose, slotMinutes = 3
                     onClick={() => onSlotSelect(slot)}
                     className="px-3 min-h-11 inline-flex items-center justify-center rounded-full border border-slate-500 bg-white text-slate-900 text-xs font-medium hover:bg-slate-900 hover:text-white hover:border-slate-900 hover:z-10 relative focus:outline-none focus-visible:ring-1 focus-visible:ring-offset-1 focus-visible:ring-slate-900 transition-colors leading-none truncate"
                   >
-                    {formatSlotInterval(slot.start, slot.end)}
+                    {formatSlotInterval(slot.start, slot.end, timeZone)}
                   </button>
                 ))}
               </div>
@@ -110,7 +127,7 @@ export function SlotPicker({ date, slots, onSlotSelect, onClose, slotMinutes = 3
                     onClick={() => onSlotSelect(slot)}
                     className="px-3 min-h-11 inline-flex items-center justify-center rounded-full border border-slate-500 bg-white text-slate-900 text-xs font-medium hover:bg-slate-900 hover:text-white hover:border-slate-900 hover:z-10 relative focus:outline-none focus-visible:ring-1 focus-visible:ring-offset-1 focus-visible:ring-slate-900 transition-colors leading-none truncate"
                   >
-                    {formatSlotInterval(slot.start, slot.end)}
+                    {formatSlotInterval(slot.start, slot.end, timeZone)}
                   </button>
                 ))}
               </div>
@@ -121,3 +138,4 @@ export function SlotPicker({ date, slots, onSlotSelect, onClose, slotMinutes = 3
     </div>
   )
 }
+

@@ -6,6 +6,7 @@ import { TextBlock } from '../components/sections/TextBlock'
 import { Testimonials } from '../components/sections/Testimonials'
 import { CTABanner } from '../components/sections/CTABanner'
 import { ImageGallery } from '../components/sections/ImageGallery'
+import { COMMON_TIMEZONES } from '../lib/timezones'
 import { CalendarView } from '../components/calendar/CalendarView'
 import { SlotPicker } from '../components/calendar/SlotPicker'
 import { BookingForm } from '../components/calendar/BookingForm'
@@ -45,6 +46,7 @@ export function Home() {
   const [selectedDate, setSelectedDate] = useState<string | null>(null)
   const [selectedSlot, setSelectedSlot] = useState<any>(null)
   const [bookingResult, setBookingResult] = useState<{ meetLink: string; dateTime: string; cancelUrl: string; source?: string; gcalError?: string; emailResult?: any; purpose?: string | null } | null>(null)
+  const [timeZone, setTimeZone] = useState(Intl.DateTimeFormat().resolvedOptions().timeZone)
 
   const selectedSlots = useMemo(() => {
     if (!selectedDate) return []
@@ -114,6 +116,8 @@ export function Home() {
               <CalendarView
                 grouped={grouped}
                 selectedDate={selectedDate}
+                timeZone={timeZone}
+                setTimeZone={setTimeZone}
                 onDateSelect={(d) => {
                   setSelectedDate(d)
                   setSelectedSlot(null)
@@ -131,7 +135,15 @@ export function Home() {
                   left a step against the card above it. */}
               <div id="slot-picker" className="mt-8 w-full space-y-6">
                 {selectedDate && !selectedSlot && !bookingResult && (
-                  <SlotPicker date={selectedDate} slots={selectedSlots} onSlotSelect={(slot) => setSelectedSlot(slot)} onClose={() => { setSelectedDate(null); setSelectedSlot(null) }} slotMinutes={slotMinutes} />
+                  <SlotPicker 
+                    date={selectedDate} 
+                    slots={selectedSlots} 
+                    onSlotSelect={(slot) => setSelectedSlot(slot)} 
+                    onClose={() => { setSelectedDate(null); setSelectedSlot(null) }} 
+                    slotMinutes={slotMinutes} 
+                    timeZone={timeZone} 
+                    setTimeZone={setTimeZone}
+                  />
                 )}
                 {!selectedDate && !bookingResult && (
                   <div className="text-center text-sm text-gray-500 py-4">
@@ -141,6 +153,7 @@ export function Home() {
                 {selectedSlot && !bookingResult && (
                   <BookingForm
                     slot={selectedSlot}
+                    timeZone={timeZone}
                     onSuccess={(result) => {
                       debug(`!!! HOME_BOOKING_SUCCESS slot=${selectedSlot.start} removing optimistic + refetching calendar with cache bust`)
                       // The visitor sees plain-English copy; the vendor's own wording is
