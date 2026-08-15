@@ -1,5 +1,5 @@
 import { verifyTurnstile } from '../_lib/turnstile'
-import { sendConfirmationEmail } from '../_lib/email'
+import { sendConfirmationEmail, sendPendingConfirmEmail } from '../_lib/email'
 import { getFreeBusy, createBookingEvent, TIMEZONE, getDiagInfo } from '../_lib/google-calendar'
 import { getBookingCalendarId, getGcalServiceKey, getResendApiKey, getTurnstileSecret, hasOAuthConfig, getMaxBookingsPerWeek, isBookingLimitEnabled } from '../_lib/env'
 
@@ -224,9 +224,10 @@ export const onRequestPost: PagesFunction<Env> = async ({ request, env }) => {
       }
     }
 
-    // Immediate booking (original way) — no confirmation click required per user request
-    // Keeps purpose in calendar invite, real Meet via OAuth if configured, slot fix, max limit disabled, !!! logs
-    // For double opt-in, set DOUBLE_OPTIN_ENABLED=true (not used now)
+    // Pending confirmation flow: record in pending_bookings instead of booking directly
+    console.log('!!! BOOKING_PENDING_FLOW_START')
+    const confirmToken = crypto.randomUUID()
+    const expiresAt = new Date(Date.now() + 60 * 60 * 1000).toISOString() // 1 hour
     const siteUrl = env?.SITE_URL || 'https://profile-webapp.pages.dev'
     const dateTimeEt = new Date(slot.start).toLocaleString('en-US', {
       timeZone: env?.TIMEZONE || TIMEZONE,
@@ -239,86 +240,26 @@ export const onRequestPost: PagesFunction<Env> = async ({ request, env }) => {
       hour12: true,
     })
 
-    console.log(`!!! IMMEDIATE_BOOKING_PATH original way — no confirm click, env=${env?.ENVIRONMENT} purpose=${purpose || 'none'}`)
-
-    // Generate cancel_token UUIDv4 — 122 bits entropy, not guessable, one-time use
-    const cancelToken = crypto.randomUUID()
-    console.log(`!!! CANCEL_TOKEN_GENERATED token=${cancelToken}`)
-
-    // Create GCal event with Meet link auto — use alias-aware env + purpose in invite
-    const diagBefore = getDiagInfo(env)
-    console.log(`!!! GCAL_CREATE_START siteUrl=${siteUrl} diag=${JSON.stringify(diagBefore)} slot=${slot.start}->${slot.end}`)
-    const { calendarEventId, meetLink, source, error: gcalError } = await createBookingEvent(env, {
-      firstName,
-      lastName,
-      email,
-      phone,
-      purpose,
-      slot: { date: slot.date || slot.start.split('T')[0], start: slot.start, end: slot.end },
-      cancelToken,
-      siteUrl,
-    })
-    console.log(`!!! GCAL_CREATE_RESULT source=${source} eventId=${calendarEventId} meetLink=${meetLink} error=${gcalError || 'none'}`)
-
-    // If we are in alpha/prod and expected live but got stub, surface error details so alpha diagnosis knows
-    const hasLiveCreds = (!!getGcalServiceKey(env) || hasOAuthConfig(env)) && !!getBookingCalendarId(env)
-    const expectedLive = hasLiveCreds && env?.ENVIRONMENT !== 'local' && env?.ENVIRONMENT !== 'test' && env?.STUB !== 'true'
-    if (expectedLive && source === 'stub') {
-      console.error(`!!! GCAL_EXPECTED_LIVE_BUT_GOT_STUB diag=${JSON.stringify(diagBefore)} gcalError=${gcalError}`)
-      console.log('!!! BOOKING_ABORT_DB_INSERT real Google required but got stub — returning 502 per requirement only record after Google 200')
-      // Per requirement: only record scheduled events in DB after Google confirms 200
-      // If Google failed in alpha/prod expected live, do NOT insert booking, return error
-      return new Response(
-        JSON.stringify({
-          error: 'Failed to create calendar event',
-          details: gcalError,
-          source,
-          diag: diagBefore,
-          guidance:
-            gcalError?.includes('forbiddenForServiceAccounts') || gcalError?.includes('attendees')
-              ? 'Service accounts cannot invite attendees without Domain-Wide Delegation — code now retries without attendees, but if still fails check Invalid conference type may need bare event'
-              : gcalError?.includes('Invalid conference type')
-                ? 'Group calendar may not support hangoutsMeet via SA without DWD — bare event created but Meet missing. Check /api/debug/check-calendar?write=true'
-                : 'Check /api/debug/diag and /api/debug/check-calendar?write=true for calendar permission and SA sharing',
-        }),
-        { status: 502, headers }
-      )
-    } else if (expectedLive) {
-      console.log('!!! GCAL_LIVE_SUCCESS real calendar event confirmed 200 — proceeding to DB insert per requirement')
-    } else {
-      console.log(`!!! GCAL_STUB_OK env=${env?.ENVIRONMENT} source=${source} — allowed for local/test, inserting stub booking for TDD`)
-    }
-
-    // Insert booking — ONLY after Google confirms 200 (source live) or in local/test stub allowed for TDD
-    console.log('!!! BOOKING_INSERT_START')
     try {
-      const bookingId = crypto.randomUUID().replace(/-/g, '').slice(0, 16)
-      console.log(`!!! BOOKING_INSERT id=${bookingId} contactId=${contactId} eventId=${calendarEventId} source=${source}`)
-      // slot_start/slot_end are what "Manage bookings" shows the visitor. Without them
-      // the lookup fell back to created_at and named the wrong meeting.
-      const insertBookingStmt = db.prepare('INSERT INTO bookings (id, contact_id, calendar_event_id, purpose, cancel_token, status, slot_start, slot_end, created_at) VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, datetime("now"))')
-      await insertBookingStmt.bind(bookingId, contactId!, calendarEventId, purpose || null, cancelToken, 'confirmed', slot.start, slot.end).run()
-      console.log('!!! BOOKING_INSERT_OK')
+      const stmt = db.prepare(
+        'INSERT INTO pending_bookings (contact_id, first_name, last_name, email, phone, purpose, slot_date, slot_start, slot_end, confirm_token, expires_at, created_at) VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10, ?11, datetime("now"))'
+      )
+      await stmt.bind(contactId, firstName, lastName, email, phone || null, purpose || null, slot.date || slot.start.split('T')[0], slot.start, slot.end, confirmToken, expiresAt).run()
+      console.log('!!! BOOKING_PENDING_RECORD_OK')
     } catch (e: any) {
-      console.log(`!!! BOOKING_INSERT_ERROR ${e?.message} fallback`)
-      // Fallback for test D1 that may have different prepare shapes
-      try {
-        const stmt = db.prepare('INSERT INTO bookings (id, contact_id, calendar_event_id, purpose, cancel_token, status, slot_start, slot_end) VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8)')
-        const bookingId = crypto.randomUUID().replace(/-/g, '').slice(0, 16)
-        await stmt.bind(bookingId, contactId!, calendarEventId, purpose || null, cancelToken, 'confirmed', slot.start, slot.end).run().catch(() => {})
-      } catch {}
+      console.log(`!!! BOOKING_PENDING_RECORD_ERROR ${e?.message}`)
+      return new Response(JSON.stringify({ error: 'Failed to initiate pending booking' }), { status: 500, headers })
     }
 
-    // Send confirmation email via Resend — includes Meet link + cancel link + dateTime ET per user request make Meet invite also contain meeting link
-    const cancelUrl = `${siteUrl}/api/cancel/${cancelToken}`
-    console.log(`!!! EMAIL_SEND_START to=${email} dateTime=${dateTimeEt} meetLink=${meetLink} cancelUrl=${cancelUrl}`)
+    // Send confirmation email via Resend
+    const confirmUrl = `${siteUrl}/api/booking/confirm/${confirmToken}`
+    console.log(`!!! PENDING_EMAIL_SEND_START to=${email} confirmUrl=${confirmUrl}`)
 
-    const emailResult = await sendConfirmationEmail({
+    const emailResult = await sendPendingConfirmEmail({
       to: email,
       firstName,
       lastName,
-      meetLink,
-      cancelUrl,
+      confirmUrl,
       dateTime: dateTimeEt,
       purpose,
       env: {
@@ -329,40 +270,23 @@ export const onRequestPost: PagesFunction<Env> = async ({ request, env }) => {
         ...env,
       },
     })
-    console.log(`!!! EMAIL_SEND_RESULT success=${emailResult.success} source=${emailResult.source} id=${emailResult.id || 'none'} error=${emailResult.error || 'none'}`)
+    console.log(`!!! PENDING_EMAIL_RESULT success=${emailResult.success} source=${emailResult.source} id=${emailResult.id || 'none'} error=${emailResult.error || 'none'}`)
 
-    // Invalidate calendar cache — for Workers Cache, we can't directly purge, but we return header to indicate invalidation needed
-
-    console.log(`!!! BOOKING_SUCCESS meetLink=${meetLink} source=${source} contactId=${contactId}`)
     return new Response(
       JSON.stringify({
-        meetLink,
-        dateTime: dateTimeEt,
-        cancelUrl,
-        cancelToken,
-        calendarEventId,
-        source,
-        gcalError: gcalError || undefined,
+        status: 'pending_confirmation',
+        message: 'Confirmation email sent. Please click the link to finalize your booking.',
         emailResult: {
           success: emailResult.success,
           source: emailResult.source,
           error: emailResult.error,
           id: emailResult.id,
         },
-        contactId,
-        diag: {
-          bookingCalendar: !!getBookingCalendarId(env),
-          gcalKey: !!getGcalServiceKey(env),
-          resendKey: !!getResendApiKey(env),
-          env: env?.ENVIRONMENT,
-        },
       }),
       {
-        status: 200,
+        status: 202,
         headers: {
           ...headers,
-          'Cache-Control': 'no-store',
-          'X-Cache-Invalidate': 'calendar_slots',
         },
       }
     )

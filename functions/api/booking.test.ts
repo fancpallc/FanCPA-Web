@@ -193,16 +193,10 @@ describe('POST /api/booking — full 10-step workflow', () => {
 
     const response = await onRequestPost({ request, env, params: {}, waitUntil: () => {}, next: async () => new Response(''), data: {} } as any)
 
-    expect(response.status).toBe(200)
+    expect(response.status).toBe(202)
     const json = await response.json() as any
-    expect(json.meetLink).toBeDefined()
-    expect(json.meetLink).toMatch(/https:\/\/meet\.google\.com\//)
-    expect(json.cancelUrl).toBeDefined()
-    expect(json.cancelUrl).toContain('/api/cancel/')
-    // cancel_token should be UUIDv4 (not sequential)
-    const token = json.cancelUrl.split('/').pop()
-    expect(token).toMatch(/^[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i) // UUIDv4 regex
-    expect(json.dateTime).toBeDefined()
+    expect(json.status).toBe('pending_confirmation')
+    expect(json.emailResult.success).toBe(true)
   })
 
   it('should rate limit 3/email/week → 429 when 4th same week', async () => {
