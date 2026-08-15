@@ -1,6 +1,8 @@
 import React, { useMemo } from 'react'
 import type { CalendarSlot } from '../../lib/api'
 import { formatSlotInterval } from '../../lib/datetime'
+import { COMMON_TIMEZONES } from '../../lib/timezones'
+
 export interface SlotPickerProps {
   date: string
   slots: CalendarSlot[]
@@ -8,6 +10,7 @@ export interface SlotPickerProps {
   onClose?: () => void
   slotMinutes?: number
   timeZone: string
+  setTimeZone: (tz: string) => void
 }
 
 function formatDateLong(dateStr: string): string {
@@ -28,7 +31,7 @@ function formatDateLong(dateStr: string): string {
   }
 }
 
-export function SlotPicker({ date, slots, onSlotSelect, onClose, slotMinutes = 30, timeZone }: SlotPickerProps) {
+export function SlotPicker({ date, slots, onSlotSelect, onClose, slotMinutes = 30, timeZone, setTimeZone }: SlotPickerProps) {
   const { morning, afternoon, availableCount } = useMemo(() => {
     const available = slots.filter((s) => s.available)
     const morning: CalendarSlot[] = []
@@ -64,16 +67,28 @@ export function SlotPicker({ date, slots, onSlotSelect, onClose, slotMinutes = 3
         <div>
           <div className="font-bold text-base tracking-tight">{formatDateLong(date)}</div>
           <div className="text-xs text-gray-500 mt-1">
-            {availableCount} times available · {slotMinutes} minutes each ·{' '}
-            <span className="font-semibold">{timeZone}</span>
+            {availableCount} times available · {slotMinutes} minutes each
+          </div>
+          <div className="mt-2">
+            <select
+              value={timeZone}
+              onChange={(e) => setTimeZone(e.target.value)}
+              className="text-xs font-semibold border-none bg-gray-100 rounded-full px-2 py-1 focus:ring-0 cursor-pointer text-slate-900"
+            >
+              {COMMON_TIMEZONES.map((tz) => (
+                <option key={tz.value} value={tz.value}>
+                  {tz.label}
+                </option>
+              ))}
+            </select>
           </div>
         </div>
         {onClose && (
           <button onClick={onClose} aria-label="Close time slots" className="w-11 h-11 rounded-full border border-slate-500 bg-white text-gray-600 hover:bg-gray-50 flex items-center justify-center text-sm focus:outline-none focus:ring-2">
             ✕
-            </button>
-          )}
-        </div>
+                  </button>
+        )}
+              </div>
 
       {availableCount === 0 ? (
         <div className="text-sm text-gray-500 py-4 text-center">

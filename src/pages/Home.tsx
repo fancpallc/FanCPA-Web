@@ -135,7 +135,15 @@ export function Home() {
                   left a step against the card above it. */}
               <div id="slot-picker" className="mt-8 w-full space-y-6">
                 {selectedDate && !selectedSlot && !bookingResult && (
-                  <SlotPicker date={selectedDate} slots={selectedSlots} onSlotSelect={(slot) => setSelectedSlot(slot)} onClose={() => { setSelectedDate(null); setSelectedSlot(null) }} slotMinutes={slotMinutes} timeZone={timeZone} />
+                  <SlotPicker 
+                    date={selectedDate} 
+                    slots={selectedSlots} 
+                    onSlotSelect={(slot) => setSelectedSlot(slot)} 
+                    onClose={() => { setSelectedDate(null); setSelectedSlot(null) }} 
+                    slotMinutes={slotMinutes} 
+                    timeZone={timeZone} 
+                    setTimeZone={setTimeZone}
+                  />
                 )}
                 {!selectedDate && !bookingResult && (
                   <div className="text-center text-sm text-gray-500 py-4">

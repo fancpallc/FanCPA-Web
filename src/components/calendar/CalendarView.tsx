@@ -85,18 +85,7 @@ export function CalendarView({ grouped, selectedDate, onDateSelect, timeZone, se
             Available times
           </h3>
           <p className="text-xs text-gray-500 mt-1">
-            Pick a weekday in the next two weeks · {slotMinutes}-minute meetings · times shown in{' '}
-            <select
-              className="bg-transparent text-slate-900 font-semibold cursor-pointer outline-none hover:underline"
-              value={timeZone}
-              onChange={(e) => setTimeZone(e.target.value)}
-            >
-              {COMMON_TIMEZONES.map((tz) => (
-                <option key={tz.value} value={tz.value}>
-                  {tz.label}
-                </option>
-              ))}
-            </select>
+            Pick a weekday in the next two weeks · {slotMinutes}-minute meetings
           </p>
         </div>
         {excludeToday && firstOpenDay && (
@@ -104,6 +93,21 @@ export function CalendarView({ grouped, selectedDate, onDateSelect, timeZone, se
             First opening: {firstOpenDay.toLocaleDateString('en-US', { timeZone: 'UTC', weekday: 'long', month: 'long', day: 'numeric' })}
           </span>
         )}
+      </div>
+
+      <div className="flex items-center justify-between mb-6">
+        <span className="text-xs text-gray-500">Times shown in:</span>
+        <select
+          className="bg-transparent text-slate-900 font-semibold cursor-pointer outline-none hover:underline text-xs"
+          value={timeZone}
+          onChange={(e) => setTimeZone(e.target.value)}
+        >
+          {COMMON_TIMEZONES.map((tz) => (
+            <option key={tz.value} value={tz.value}>
+              {tz.label}
+            </option>
+          ))}
+        </select>
       </div>
 
       <div className="grid grid-cols-7 gap-1.5 sm:gap-3 mb-3">
