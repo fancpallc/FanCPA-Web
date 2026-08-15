@@ -1,11 +1,14 @@
 import React from 'react'
 import type { CalendarSlot } from '../../lib/api'
 import { TIMEZONE, TIMEZONE_LABEL } from '../../lib/constants'
+import { COMMON_TIMEZONES } from '../../lib/timezones'
 
 export interface CalendarViewProps {
   grouped: Record<string, CalendarSlot[]>
   selectedDate: string | null
   onDateSelect: (date: string) => void
+  timeZone: string
+  setTimeZone: (tz: string) => void
   excludeToday?: boolean
   slotMinutes?: number
 }
@@ -63,9 +66,8 @@ function formatDayShort(date: Date): { dow: string; day: string; month: string; 
   }
 }
 
-export function CalendarView({ grouped, selectedDate, onDateSelect, excludeToday = true, slotMinutes = 30 }: CalendarViewProps) {
+export function CalendarView({ grouped, selectedDate, onDateSelect, timeZone, setTimeZone, excludeToday = true, slotMinutes = 30 }: CalendarViewProps) {
   const { weeks, selectableSet } = getCalendarGrid(excludeToday)
-
   // The badge used to read a flat "Booking opens from tomorrow". On a Friday or a
   // Saturday tomorrow is a disabled weekend cell in the very same card, so the badge
   // contradicted the grid two days in seven. Naming the first day that actually has
@@ -83,7 +85,18 @@ export function CalendarView({ grouped, selectedDate, onDateSelect, excludeToday
             Available times
           </h3>
           <p className="text-xs text-gray-500 mt-1">
-            Pick a weekday in the next two weeks · {slotMinutes}-minute meetings · times shown in {TIMEZONE_LABEL}
+            Pick a weekday in the next two weeks · {slotMinutes}-minute meetings · times shown in{' '}
+            <select
+              className="bg-transparent text-slate-900 font-semibold cursor-pointer outline-none hover:underline"
+              value={timeZone}
+              onChange={(e) => setTimeZone(e.target.value)}
+            >
+              {COMMON_TIMEZONES.map((tz) => (
+                <option key={tz.value} value={tz.value}>
+                  {tz.label}
+                </option>
+              ))}
+            </select>
           </p>
         </div>
         {excludeToday && firstOpenDay && (
@@ -170,3 +183,4 @@ export function CalendarView({ grouped, selectedDate, onDateSelect, excludeToday
     </div>
   )
 }
+

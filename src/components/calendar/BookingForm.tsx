@@ -10,9 +10,10 @@ export interface BookingFormProps {
   slot: CalendarSlot
   onSuccess: (data: { meetLink: string; dateTime: string; cancelUrl: string; source?: string; gcalError?: string; emailResult?: any; pending?: boolean }) => void
   onCancel?: () => void
+  timeZone: string
 }
 
-export function BookingForm({ slot, onSuccess, onCancel }: BookingFormProps) {
+export function BookingForm({ slot, onSuccess, onCancel, timeZone }: BookingFormProps) {
   const [firstName, setFirstName] = useState('')
   const [lastName, setLastName] = useState('')
   const [email, setEmail] = useState('')
@@ -354,7 +355,7 @@ export function BookingForm({ slot, onSuccess, onCancel }: BookingFormProps) {
     <form onSubmit={handleSubmit} noValidate className="card rounded-2xl p-6 bg-white shadow-sm w-full max-w-xl mx-auto">
       <div className="flex justify-between items-start gap-3 mb-4">
         <div>
-          <h3 className="font-bold text-lg tracking-tight">{formatSlotRange(slot.start, slot.end)}</h3>
+          <h3 className="font-bold text-lg tracking-tight">{formatSlotRange(slot.start, slot.end, timeZone)}</h3>
           <p className="text-xs text-gray-500 mt-1">A calendar invite with a video link is sent as soon as you book.</p>
         </div>
         {onCancel && (
