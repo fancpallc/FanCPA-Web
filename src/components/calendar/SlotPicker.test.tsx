@@ -11,7 +11,7 @@ describe('SlotPicker', () => {
       { date: '2026-07-20', start: '2026-07-20T14:00:00Z', end: '2026-07-20T14:30:00Z', available: true },
     ] as any
 
-    render(<SlotPicker date="2026-07-20" slots={slots} onSlotSelect={vi.fn()} slotMinutes={30} timeZone={timeZone} />)
+    render(<SlotPicker date="2026-07-20" slots={slots} onSlotSelect={vi.fn()} slotMinutes={30} timeZone={timeZone} setTimeZone={vi.fn()} />)
     // Interval keeps a meridiem: a bare "1:00 - 1:30" in a list starting at 9:00 reads as morning.
     expect(screen.getByText(/9:00 – 9:30 AM/) || screen.getByText(/10:00 – 10:30 AM/)).toBeTruthy()
   })
@@ -23,7 +23,7 @@ describe('SlotPicker', () => {
       { date: '2026-08-03', start: '2026-08-03T13:00:00Z', end: '2026-08-03T13:30:00Z', available: true },
     ] as any
 
-    render(<SlotPicker date="2026-08-03" slots={slots} onSlotSelect={vi.fn()} slotMinutes={30} timeZone={timeZone} />)
+    render(<SlotPicker date="2026-08-03" slots={slots} onSlotSelect={vi.fn()} slotMinutes={30} timeZone={timeZone} setTimeZone={vi.fn()} />)
     expect(screen.getByText(/Monday, August 3/)).toBeInTheDocument()
   })
 
@@ -32,13 +32,13 @@ describe('SlotPicker', () => {
       { date: '2026-07-20', start: '2026-07-20T13:00:00Z', end: '2026-07-20T13:30:00Z', available: false },
     ] as any
 
-    render(<SlotPicker date="2026-07-20" slots={slots} onSlotSelect={vi.fn()} slotMinutes={30} timeZone={timeZone} />)
+    render(<SlotPicker date="2026-07-20" slots={slots} onSlotSelect={vi.fn()} slotMinutes={30} timeZone={timeZone} setTimeZone={vi.fn()} />)
     expect(document.body.innerHTML).not.toContain('Meeting with')
     expect(document.body.innerHTML).not.toContain('Private event')
   })
 
   it('should show empty state when no slots today', () => {
-    render(<SlotPicker date="2026-07-20" slots={[]} onSlotSelect={vi.fn()} slotMinutes={30} timeZone={timeZone} />)
+    render(<SlotPicker date="2026-07-20" slots={[]} onSlotSelect={vi.fn()} slotMinutes={30} timeZone={timeZone} setTimeZone={vi.fn()} />)
     expect(screen.getByText(/no slots/i)).toBeInTheDocument()
   })
 
@@ -49,7 +49,7 @@ describe('SlotPicker', () => {
       { date: '2026-07-20', start: '2026-07-20T13:00:00Z', end: '2026-07-20T13:30:00Z', available: true },
     ] as any
 
-    render(<SlotPicker date="2026-07-20" slots={slots} onSlotSelect={onSelect} onClose={onClose} slotMinutes={30} timeZone={timeZone} />)
+    render(<SlotPicker date="2026-07-20" slots={slots} onSlotSelect={onSelect} onClose={onClose} slotMinutes={30} timeZone={timeZone} setTimeZone={vi.fn()} />)
     // Button shows interval 9:00 – 9:30 AM (Eastern)
     const btn = screen.getByRole('button', { name: /9:00 – 9:30 AM/ })
     btn.click()
@@ -62,7 +62,7 @@ describe('SlotPicker', () => {
     const slots = [
       { date: '2026-07-20', start: '2026-07-20T13:00:00Z', end: '2026-07-20T13:30:00Z', available: true },
     ] as any
-    render(<SlotPicker date="2026-07-20" slots={slots} onSlotSelect={vi.fn()} slotMinutes={30} timeZone={timeZone} />)
+    render(<SlotPicker date="2026-07-20" slots={slots} onSlotSelect={vi.fn()} slotMinutes={30} timeZone={timeZone} setTimeZone={vi.fn()} />)
     const btn = screen.getByRole('button', { name: /9:00 – 9:30 AM/ })
     // Compact per the original request — small text, tight horizontal padding, no
     // scale transform that would let a label overlap the border.
