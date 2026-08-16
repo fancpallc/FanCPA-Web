@@ -189,7 +189,8 @@ export function Home() {
                         day: 'numeric',
                         hour: 'numeric',
                         minute: '2-digit',
-                      })}
+                        timeZone: timeZone,
+                      })} ({timeZone})
                     </p>
                     {bookingResult.purpose && <p className="text-sm mb-2">Purpose: <strong>{bookingResult.purpose}</strong></p>}
                     <p className="text-sm mb-6 text-amber-900">
