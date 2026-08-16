@@ -40,6 +40,7 @@ export interface AdminPage {
   footer_tagline?: string | null
   icon_url?: string | null
   booking_max_per_week?: number | null
+  google_tag_manager_id?: string | null
 }
 
 export interface UseAdminContentReturn {

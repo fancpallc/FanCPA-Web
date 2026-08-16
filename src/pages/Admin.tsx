@@ -376,6 +376,18 @@ export function Admin() {
                   />
                 </div>
               </div>
+              <div>
+                <div className="editor-chrome text-[11px] text-gray-500 mb-1">Google Tag Manager ID</div>
+                <div className="text-sm">
+                  <EditableText
+                    value={content.page?.google_tag_manager_id || ''}
+                    onSave={async (v) => { try { await content.updatePage({ google_tag_manager_id: v || null }) } catch (e: any) { setGlobalError(e?.message); throw e } }}
+                    placeholder="GTM-XXXXXXX"
+                    ariaLabel="Google Tag Manager ID"
+                    displayClassName="text-sm"
+                  />
+                </div>
+              </div>
             </div>
           </div>
 

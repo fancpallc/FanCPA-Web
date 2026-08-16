@@ -77,6 +77,7 @@ export const onRequestGet: PagesFunction<Env> = async ({ params, env }) => {
         site_name: (page as any).site_name ?? null,
         footer_tagline: (page as any).footer_tagline ?? null,
         icon_url: (page as any).icon_url ?? null,
+        google_tag_manager_id: (page as any).google_tag_manager_id ?? null,
         sort_order: page.sort_order,
         is_published: page.is_published,
       },
@@ -119,3 +120,4 @@ export const onRequestGet: PagesFunction<Env> = async ({ params, env }) => {
     })
   }
 }
+
