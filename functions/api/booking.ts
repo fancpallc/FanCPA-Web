@@ -250,6 +250,7 @@ export const onRequestPost: PagesFunction<Env> = async ({ request, env }) => {
       hour: 'numeric',
       minute: '2-digit',
       hour12: true,
+      timeZoneName: 'short',
     })
 
     try {
