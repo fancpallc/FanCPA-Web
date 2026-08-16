@@ -180,10 +180,10 @@ export function Home() {
                 {bookingResult && (
                   <div className="card rounded-2xl p-6 bg-amber-50 border-amber-300 text-center">
                     <h3 className="font-black text-xl mb-3 text-amber-900">Booking Requested</h3>
-                    <p className="text-sm mb-2">{bookingResult.dateTime}</p>
+                    <p className="text-sm mb-2">Thank you for scheduling a time from {bookingResult.dateTime}.</p>
                     {bookingResult.purpose && <p className="text-sm mb-2">Purpose: <strong>{bookingResult.purpose}</strong></p>}
                     <p className="text-sm mb-6 text-amber-900">
-                      A confirmation email is on its way, please check your inbox at <strong>{bookingResult.emailResult?.email || bookingResult.email || 'your email address'}</strong>.
+                      A confirmation email is on its way, <strong>please check {bookingResult.emailResult?.email || bookingResult.email || 'your email address'} inbox to confirm this appointment.</strong>
                     </p>
                   </div>
                 )}
