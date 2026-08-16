@@ -228,7 +228,11 @@ export const onRequestPost: PagesFunction<Env> = async ({ request, env }) => {
     console.log('!!! BOOKING_PENDING_FLOW_START')
     const confirmToken = crypto.randomUUID()
     const expiresAt = new Date(Date.now() + 60 * 60 * 1000).toISOString() // 1 hour
-    const siteUrl = env?.SITE_URL || 'https://profile-webapp.pages.dev'
+    
+    // Use the origin from the request URL to correctly build the confirmation link
+    const url = new URL(request.url)
+    const siteUrl = `${url.protocol}//${url.host}`
+    
     const dateTimeEt = new Date(slot.start).toLocaleString('en-US', {
       timeZone: env?.TIMEZONE || TIMEZONE,
       weekday: 'long',
