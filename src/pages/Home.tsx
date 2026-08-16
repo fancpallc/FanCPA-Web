@@ -163,6 +163,8 @@ export function Home() {
                       if (result.emailResult && !result.emailResult.success) debug(`!!! HOME_BOOKING_EMAIL_ERROR ${result.emailResult.error}`)
 
                       const emailToDisplay = result.email || result.emailResult?.email || 'your email address'
+                      console.log('!!! result', result)
+                      console.log('!!! slot', selectedSlot)
 
                       setBookingResult({ ...result, email: emailToDisplay })
                       // Optimistic removal so slot disappears immediately without reload
