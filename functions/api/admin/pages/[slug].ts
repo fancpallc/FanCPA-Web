@@ -1,4 +1,4 @@
-import { requireAdminAuth, isAdminAuthenticated } from '../../../_lib/auth'
+u soulhimport { requireAdminAuth, isAdminAuthenticated } from '../../../_lib/auth'
 import { getEnvironment } from '../../../_lib/env'
 
 export interface Env {
@@ -61,6 +61,12 @@ export const onRequestPut: PagesFunction<Env> = async ({ request, env, params })
 
   for (const field of patch) {
     const value = body[field]
+    if (field === 'booking_max_per_week') {
+      if (typeof value !== 'number' && isNaN(parseInt(value))) {
+         return new Response(JSON.stringify({ error: 'Booking limit must be a number' }), { status: 400, headers })
+       }
+      continue
+    }
     if (value !== null && typeof value !== 'string') {
       return new Response(JSON.stringify({ error: `${field} must be text` }), { status: 400, headers })
     }
@@ -71,11 +77,6 @@ export const onRequestPut: PagesFunction<Env> = async ({ request, env, params })
     // the raw URL. Both are worse than the placeholder they replaced.
     if ((field === 'site_name' || field === 'title') && typeof value === 'string' && !value.trim()) {
       return new Response(JSON.stringify({ error: `${field === 'site_name' ? 'Your site name' : 'The browser tab title'} cannot be empty` }), { status: 400, headers })
-    }
-    if (field === 'booking_max_per_week') {
-       if (isNaN(parseInt(value))) {
-         return new Response(JSON.stringify({ error: 'Booking limit must be a number' }), { status: 400, headers })
-       }
     }
   }
 

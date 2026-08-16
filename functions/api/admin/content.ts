@@ -78,6 +78,7 @@ export const onRequestGet: PagesFunction<Env> = async ({ request, env }) => {
           site_name: (page as any).site_name ?? null,
           footer_tagline: (page as any).footer_tagline ?? null,
           icon_url: (page as any).icon_url ?? null,
+          booking_max_per_week: (page as any).booking_max_per_week ?? 3,
         },
         sections: sectionsWithItems,
         meta: {
@@ -148,3 +149,4 @@ export const onRequestGet: PagesFunction<Env> = async ({ request, env }) => {
     })
   }
 }
+

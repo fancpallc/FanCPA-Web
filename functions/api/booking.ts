@@ -118,12 +118,19 @@ export const onRequestPost: PagesFunction<Env> = async ({ request, env }) => {
     } else {
       try {
         const weekStart = getWeekStart(new Date()).toISOString()
+        
+        // Get dynamic limit from DB page home config
+        const page = await db.prepare('SELECT booking_max_per_week FROM pages WHERE slug = "home"').first() as any
+        const dbMax = page?.booking_max_per_week ?? 3
+        const maxPerWeek = dbMax > 0 ? dbMax : getMaxBookingsPerWeek(env)
         console.log(`!!! BOOKING_RATE_LIMIT weekStart=${weekStart} max=${maxPerWeek}`)
+        
         const countStmt = db.prepare('SELECT COUNT(*) as count FROM bookings WHERE contact_id IN (SELECT id FROM contacts WHERE email = ?1) AND created_at >= ?2')
         const countResult = await countStmt.bind(email, weekStart).first() as any
         const count = countResult?.count ?? 0
         console.log(`!!! BOOKING_RATE_LIMIT count=${count} email=${email} max=${maxPerWeek}`)
-        if (count >= maxPerWeek) {
+        
+        if (count >= maxPerWeek && maxPerWeek > 0) {
           console.log(`!!! BOOKING_RATE_LIMIT_EXCEEDED count=${count} max=${maxPerWeek}`)
           return new Response(JSON.stringify({ error: `Rate limit exceeded: ${maxPerWeek} bookings per email per week`, count, maxPerWeek }), {
             status: 429,
@@ -132,7 +139,7 @@ export const onRequestPost: PagesFunction<Env> = async ({ request, env }) => {
         }
         // Warning flag same email booked this week — only when maxPerWeek >1 and limit enabled
         // If maxPerWeek is 1, duplicate warning at count>=1; if you want to allow unlimited, set max 0 or disabled
-        if (count >= 1) {
+        if (count >= 1 && maxPerWeek > 0) {
           if (!body.confirmIntent && !body.confirm_intent) {
             console.log(`!!! BOOKING_DUPLICATE_WARNING count=${count} need confirmIntent max=${maxPerWeek}`)
             return new Response(
