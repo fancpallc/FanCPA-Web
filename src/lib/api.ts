@@ -162,6 +162,7 @@ export interface BookingPayload {
   slot: CalendarSlot | { date?: string; start: string; end: string }
   turnstileToken?: string
   confirmIntent?: boolean
+  timeZone?: string
 }
 
 export interface BookingResponse {
@@ -245,6 +246,7 @@ export async function createBooking(payload: BookingPayload, options: FetchOptio
         slot: payload.slot,
         turnstileToken: payload.turnstileToken,
         confirmIntent: payload.confirmIntent,
+        timeZone: payload.timeZone,
       }),
       signal: controller.signal,
     })

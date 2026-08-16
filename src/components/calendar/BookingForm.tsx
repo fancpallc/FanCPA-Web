@@ -8,7 +8,7 @@ import { BOOKING_MESSAGES } from '../../lib/bookingMessages'
 
 export interface BookingFormProps {
   slot: CalendarSlot
-  onSuccess: (data: { meetLink: string; dateTime: string; cancelUrl: string; source?: string; gcalError?: string; emailResult?: any; pending?: boolean }) => void
+  onSuccess: (data: { meetLink: string; dateTime: string; cancelUrl: string; source?: string; gcalError?: string; emailResult?: any; email?: string; pending?: boolean }) => void
   onCancel?: () => void
   timeZone: string
 }
@@ -174,6 +174,7 @@ export function BookingForm({ slot, onSuccess, onCancel, timeZone }: BookingForm
         slot,
         turnstileToken,
         confirmIntent: intentOverride ?? confirmIntent,
+        timeZone,
       })
       debug(`!!! BOOKING_FORM_API_RESULT warning=${!!(result as any).warning} pending=${!!(result as any).pending} meetLink=${result.meetLink} source=${result.source} gcalError=${result.gcalError || 'none'} emailSuccess=${result.emailResult?.success}`)
       // Handle duplicate warning same email this week — token is consumed by first verify, need new token for confirm
@@ -215,6 +216,7 @@ export function BookingForm({ slot, onSuccess, onCancel, timeZone }: BookingForm
         source: result.source,
         gcalError: result.gcalError,
         emailResult: result.emailResult,
+        email: email,
         pending: false,
       })
       return result
@@ -388,7 +390,7 @@ export function BookingForm({ slot, onSuccess, onCancel, timeZone }: BookingForm
 
       <div className="mt-4">
         <label htmlFor="purpose" className="block text-xs font-semibold mb-1">Purpose</label>
-        <textarea id="purpose" value={purpose} onChange={(e) => setPurpose(e.target.value)} className="w-full border border-slate-500 rounded-lg px-3 py-2 text-sm" rows={3} placeholder="Brand strategy intro, logo review, etc." />
+        <textarea id="purpose" value={purpose} onChange={(e) => setPurpose(e.target.value)} className="w-full border border-slate-500 rounded-lg px-3 py-2 text-sm" rows={3} placeholder="prepares tax returns, audits financial statements, strategic financial advice etc" />
       </div>
 
       {/* Turnstile widget — invisible challenge on booking form */}

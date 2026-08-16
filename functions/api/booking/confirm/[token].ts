@@ -200,7 +200,8 @@ export const onRequestGet: PagesFunction<Env> = async ({ params, env, request })
 
     // Send final confirmation email with Meet link + purpose + cancel
     const dateTimeEt = new Date(pending.slot_start).toLocaleString('en-US', {
-      timeZone: env?.TIMEZONE || TIMEZONE,
+
+      timeZone: pending.time_zone || env?.TIMEZONE || TIMEZONE,
       weekday: 'long',
       year: 'numeric',
       month: 'long',
@@ -208,6 +209,7 @@ export const onRequestGet: PagesFunction<Env> = async ({ params, env, request })
       hour: 'numeric',
       minute: '2-digit',
       hour12: true,
+      timeZoneName: 'short',
     })
 
     const cancelUrl = `${siteUrl}/api/cancel/${cancelToken}`
@@ -258,10 +260,11 @@ export const onRequestGet: PagesFunction<Env> = async ({ params, env, request })
         ${pending.purpose ? `<div style="margin-top:12px;background:white;padding:12px;border-radius:8px;border:1px solid #e2e8f0;"><strong>Purpose:</strong> ${pending.purpose}</div>` : ''}
         <p style="margin-top:12px;">Meet: <a href="${meetLink}" target="_blank" rel="noopener noreferrer" style="color:#0f172a; text-decoration:underline;">${meetLink || 'No Meet link (bare event — group calendar may not support Meet via SA, but slot blocked)'}</a></p>
         ${gcalError ? `<div style="margin-top:8px;padding:8px;background:#fef3c7;border:1px solid #fcd34d;border-radius:8px;font-size:12px;">Note: ${gcalError}</div>` : ''}
-        <p style="margin-top:8px;font-size:13px;color:#64748b;">Cancel anytime: <a href="${cancelUrl}" style="color:#dc2626;">${cancelUrl}</a></p>
+        <p style="margin-top:8px;font-size:13px;color:#64748b;">Cancel anytime: <a href="${cancelUrl}" style="color:#dc2626; text-decoration:underline;">${cancelUrl}</a></p>
         <div style="margin-top:24px;display:flex;gap:12px;flex-wrap:wrap;">
           <a href="${meetLink}" target="_blank" style="padding:12px 24px;background:#0f172a;color:white;border-radius:999px;text-decoration:none;font-weight:600;font-size:14px;">Open Meet →</a>
           <a href="/" style="padding:12px 24px;background:white;border:1px solid #e2e8f0;border-radius:999px;text-decoration:none;color:#0f172a;font-weight:600;font-size:14px;">Back to home</a>
+          <button onclick="(() => { const data = \`BEGIN:VCALENDAR\nVERSION:2.0\nPRODID:-//FanCPA//Meeting//EN\nBEGIN:VEVENT\nSUMMARY:Meeting with ${pending.first_name} ${pending.last_name}\nDESCRIPTION:${pending.purpose || 'Intro call'}\nDTSTART:${new Date(pending.slot_start).toISOString().replace(/[-:]/g, '').split('.')[0]}Z\nDTEND:${new Date(pending.slot_end).toISOString().replace(/[-:]/g, '').split('.')[0]}Z\nLOCATION:${meetLink}\nEND:VEVENT\nEND:VCALENDAR\`; const blob = new Blob([data], { type: 'text/calendar' }); const url = URL.createObjectURL(blob); const a = document.createElement('a'); a.href = url; a.download = 'meeting.ics'; a.click(); })()" style="padding:12px 24px;background:white;border:1px solid #e2e8f0;border-radius:999px;text-decoration:none;color:#0f172a;font-weight:600;font-size:14px;cursor:pointer;">Download .ics</button>
         </div>
         <p style="margin-top:16px;font-size:12px;color:#94a3b8;">Purpose included in calendar invite: ${pending.purpose || 'Intro call'} — Google event ${calendarEventId} source ${source}</p>
       </div>
