@@ -8,7 +8,7 @@ import { BOOKING_MESSAGES } from '../../lib/bookingMessages'
 
 export interface BookingFormProps {
   slot: CalendarSlot
-  onSuccess: (data: { meetLink: string; dateTime: string; cancelUrl: string; source?: string; gcalError?: string; emailResult?: any; pending?: boolean }) => void
+  onSuccess: (data: { meetLink: string; dateTime: string; cancelUrl: string; source?: string; gcalError?: string; emailResult?: any; email?: string; pending?: boolean }) => void
   onCancel?: () => void
   timeZone: string
 }
@@ -215,6 +215,7 @@ export function BookingForm({ slot, onSuccess, onCancel, timeZone }: BookingForm
         source: result.source,
         gcalError: result.gcalError,
         emailResult: result.emailResult,
+        email: email,
         pending: false,
       })
       return result
