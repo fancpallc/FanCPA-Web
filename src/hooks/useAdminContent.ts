@@ -39,6 +39,7 @@ export interface AdminPage {
   site_name?: string | null
   footer_tagline?: string | null
   icon_url?: string | null
+  booking_max_per_week?: number | null
 }
 
 export interface UseAdminContentReturn {

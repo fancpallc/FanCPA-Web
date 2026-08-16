@@ -175,43 +175,10 @@ export function Home() {
                 )}
                 {bookingResult && (
                   <div className="card rounded-2xl p-6 bg-green-50 border-green-300 text-center">
-                    <h3 className="font-black text-xl mb-3">Meeting Confirmed ✅</h3>
+                    <h3 className="font-black text-xl mb-3">Booking Requested</h3>
                     <p className="text-sm mb-2">{bookingResult.dateTime}</p>
                     {bookingResult.purpose && <p className="text-sm mb-2">Purpose: <strong>{bookingResult.purpose}</strong></p>}
-                    <p className="text-sm mb-2">Meet: <a href={bookingResult.meetLink} target="_blank" rel="noopener noreferrer" className="underline">{bookingResult.meetLink}</a></p>
-                    {/* The vendor's own error string used to be printed here verbatim, so a
-                        delivery failure showed the visitor Resend's developer documentation
-                        and the calendar stub told them to check /api/debug/diag. The raw
-                        text goes to the DEV console instead. */}
-                    {isPlaceholderMeetLink(bookingResult.meetLink) && (
-                      <div className="mx-auto max-w-md p-3 border border-amber-300 bg-amber-50 rounded-lg text-xs text-amber-800 mb-3 text-left">
-                        <div className="font-semibold">{BOOKING_MESSAGES.placeholderMeetLink.heading}</div>
-                        <div>{BOOKING_MESSAGES.placeholderMeetLink.detail}</div>
-                      </div>
-                    )}
-                    {bookingResult.emailResult && !bookingResult.emailResult.success && (
-                      <div className="mx-auto max-w-md p-3 border border-orange-300 bg-orange-50 rounded-lg text-xs text-orange-800 mb-3 text-left">
-                        <div className="font-semibold">{BOOKING_MESSAGES.emailNotSent.heading}</div>
-                        <div>{BOOKING_MESSAGES.emailNotSent.detail}</div>
-                      </div>
-                    )}
-                    {/* Saying nothing when the email did go out leaves the visitor
-                        wondering whether to expect one. */}
-                    {bookingResult.emailResult?.success && bookingResult.emailResult.source === 'live' && (
-                      <p className="text-xs text-green-800 mb-3">A confirmation email is on its way.</p>
-                    )}
-                    <div className="flex gap-3 justify-center flex-wrap">
-                      <button onClick={() => { const ics = generateIcsContent({ title: `Meeting — ${bookingResult.dateTime}`, description: `Meet: ${bookingResult.meetLink}\nCancel: ${bookingResult.cancelUrl}`, location: bookingResult.meetLink, start: selectedSlot?.start || new Date().toISOString(), end: selectedSlot?.end || new Date().toISOString(), meetLink: bookingResult.meetLink }); downloadIcsFile(ics, `meeting-${selectedDate}.ics`); }} className="px-6 py-3 bg-slate-900 text-white rounded-full text-sm font-semibold hover:bg-black leading-none">
-                        Download invite (.ics)
-                      </button>
-                      <a href={bookingResult.cancelUrl} className="px-6 py-3 rounded-full border border-red-600 bg-white text-red-700 text-sm font-semibold hover:bg-red-50 leading-none inline-flex items-center justify-center">
-                        Cancel meeting
-                      </a>
-                    </div>
-                    <div className="flex gap-3 justify-center flex-wrap mt-4">
-                      <button onClick={() => { debug('!!! HOME_BOOK_ANOTHER clear + refetch'); setSelectedDate(null); setSelectedSlot(null); setBookingResult(null); refetchCalendar(); }} className="px-6 py-3 bg-black text-white rounded-full text-sm font-semibold leading-none">Book another</button>
-                      <a href={bookingResult.meetLink} target="_blank" rel="noopener noreferrer" className="px-6 py-3 bg-white border border-slate-500 rounded-full text-sm font-semibold leading-none inline-flex items-center justify-center">Open Meet →</a>
-                    </div>
+                    <p className="text-sm mb-6 text-green-900">A confirmation email is on its way, please check your inbox.</p>
                   </div>
                 )}
               </div>
@@ -224,3 +191,4 @@ export function Home() {
     </div>
   )
 }
+

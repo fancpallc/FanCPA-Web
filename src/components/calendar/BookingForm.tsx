@@ -305,43 +305,11 @@ export function BookingForm({ slot, onSuccess, onCancel, timeZone }: BookingForm
 
     return (
       <div className="card rounded-2xl p-6 bg-green-50 border-green-300">
-        <h3 className="font-bold text-lg mb-2">Meeting Confirmed ✅</h3>
+        <h3 className="font-bold text-lg mb-2">Booking Requested</h3>
         <p className="text-sm mb-2">Date: {success.dateTime}</p>
         {(success as any).purpose && <p className="text-sm mb-2">Purpose: <strong>{(success as any).purpose}</strong></p>}
-        <p className="text-sm mb-3">
-          Meet: <a href={success.meetLink} className="underline" target="_blank" rel="noopener noreferrer">{success.meetLink}</a>
-        </p>
-        {/* Neither box prints the vendor's error. Resend's 422 tells the visitor to
-            "use our testing email address" and read Resend's documentation — support copy
-            aimed at a developer, shown to a prospective client. It goes to the DEV console. */}
-        {isFakeMeet && (
-          <div className="p-3 border border-amber-300 bg-amber-50 rounded-lg text-xs text-amber-800 mb-3">
-            <div className="font-semibold">{BOOKING_MESSAGES.placeholderMeetLink.heading}</div>
-            <div>{BOOKING_MESSAGES.placeholderMeetLink.detail}</div>
-          </div>
-        )}
-        {success.emailResult && !success.emailResult.success && (
-          <div className="p-3 border border-orange-300 bg-orange-50 rounded-lg text-xs text-orange-800 mb-3">
-            <div className="font-semibold">{BOOKING_MESSAGES.emailNotSent.heading}</div>
-            <div>{BOOKING_MESSAGES.emailNotSent.detail}</div>
-          </div>
-        )}
-        {success.emailResult && success.emailResult.success && success.emailResult.source === 'live' && (
-          <div className="p-2 border border-green-200 bg-white rounded-lg text-[11px] text-green-700 mb-3">
-            📧 Confirmation email sent
-          </div>
-        )}
-        <div className="flex flex-wrap gap-3 mt-4">
-          <button onClick={handleDownloadIcs} className="px-6 py-3 bg-slate-900 text-white rounded-full text-sm font-semibold hover:bg-black leading-none">
-            Download invite (.ics)
-          </button>
-          <a href={success.cancelUrl} className="px-6 py-3 rounded-full border border-red-600 bg-white text-red-700 text-sm font-semibold hover:bg-red-50 leading-none inline-flex items-center justify-center">
-            Cancel meeting
-          </a>
-          <button onClick={() => navigator.clipboard.writeText(success.meetLink)} className="px-6 py-3 bg-black text-white rounded-full text-sm font-medium leading-none">
-            Copy Meet link
-          </button>
-        </div>
+        <p className="text-sm mb-6 text-green-900">A confirmation email is on its way, please check your inbox.</p>
+        
         {onCancel && (
           <button onClick={onCancel} className="mt-6 px-6 py-3 border border-slate-500 rounded-full text-sm font-medium hover:bg-gray-50 leading-none">
             Close
