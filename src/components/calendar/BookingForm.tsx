@@ -388,7 +388,7 @@ export function BookingForm({ slot, onSuccess, onCancel, timeZone }: BookingForm
 
       <div className="mt-4">
         <label htmlFor="purpose" className="block text-xs font-semibold mb-1">Purpose</label>
-        <textarea id="purpose" value={purpose} onChange={(e) => setPurpose(e.target.value)} className="w-full border border-slate-500 rounded-lg px-3 py-2 text-sm" rows={3} placeholder="Brand strategy intro, logo review, etc." />
+        <textarea id="purpose" value={purpose} onChange={(e) => setPurpose(e.target.value)} className="w-full border border-slate-500 rounded-lg px-3 py-2 text-sm" rows={3} placeholder="prepares tax returns, audits financial statements, strategic financial advice etc" />
       </div>
 
       {/* Turnstile widget — invisible challenge on booking form */}
