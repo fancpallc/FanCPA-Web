@@ -10,7 +10,7 @@ export interface Env {
 }
 
 /** Fields the owner may edit. `slug` and `id` are deliberately not among them. */
-const EDITABLE = ['site_name', 'footer_tagline', 'icon_url', 'title', 'meta_description', 'booking_max_per_week'] as const
+const EDITABLE = ['site_name', 'footer_tagline', 'icon_url', 'title', 'meta_description', 'booking_max_per_week', 'google_tag_manager_id'] as const
 
 /** Long enough for a name or a sentence; short enough that the header cannot be broken. */
 const MAX_LENGTH: Record<(typeof EDITABLE)[number], number> = {
@@ -20,6 +20,7 @@ const MAX_LENGTH: Record<(typeof EDITABLE)[number], number> = {
   title: 70,
   meta_description: 160,
   booking_max_per_week: 10,
+  google_tag_manager_id: 20,
 }
 
 /**
@@ -66,6 +67,11 @@ export const onRequestPut: PagesFunction<Env> = async ({ request, env, params })
          return new Response(JSON.stringify({ error: 'Booking limit must be a number' }), { status: 400, headers })
        }
       continue
+    }
+    if (field === 'google_tag_manager_id') {
+      if (value !== null && typeof value === 'string' && value.length > 0 && !value.startsWith('GTM-')) {
+        return new Response(JSON.stringify({ error: 'GTM ID must start with GTM-' }), { status: 400, headers })
+      }
     }
     if (value !== null && typeof value !== 'string') {
       return new Response(JSON.stringify({ error: `${field} must be text` }), { status: 400, headers })
