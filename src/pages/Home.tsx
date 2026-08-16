@@ -193,21 +193,9 @@ export function Home() {
                       })} ({timeZone})
                     </p>
                     {bookingResult.purpose && <p className="text-sm mb-2">Purpose: <strong>{bookingResult.purpose}</strong></p>}
-                    <p className="text-sm mb-6 text-amber-900">
+                    <p className="text-sm mb-4 text-amber-900">
                       A confirmation email is on its way, <strong>please check {bookingResult.emailResult?.email || bookingResult.email || 'your email address'} inbox to confirm this appointment.</strong>
                     </p>
-                    <button
-                      onClick={() => downloadIcsFile(generateIcsContent({
-                        title: `Meeting with ${bookingResult.purpose || 'Client'}`,
-                        description: bookingResult.purpose || 'Intro call',
-                        start: selectedSlot.start,
-                        end: selectedSlot.end,
-                        location: bookingResult.meetLink
-                      }), 'meeting.ics')}
-                      className="text-xs text-amber-800 underline hover:text-amber-900"
-                    >
-                      Download .ics
-                    </button>
                   </div>
                 )}
               </div>
