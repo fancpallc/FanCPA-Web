@@ -280,14 +280,14 @@ export const onRequestGet: PagesFunction<Env> = async ({ params, env, request })
               'END:VCALENDAR'
             ].join('\\r\\n');
             const blob = new Blob([data], { type: 'text/calendar;charset=utf-8' });
-            const url = URL.createObjectURL(blob);
+            const url = window.URL.createObjectURL(blob);
             const a = document.createElement('a');
             a.href = url;
             a.download = 'meeting.ics';
             document.body.appendChild(a);
             a.click();
             document.body.removeChild(a);
-            URL.revokeObjectURL(url);
+            window.URL.revokeObjectURL(url);
           })()" style="padding:12px 24px;background:white;border:1px solid #e2e8f0;border-radius:999px;text-decoration:none;color:#0f172a;font-weight:600;font-size:14px;cursor:pointer;">Download .ics</button>
         </div>
         <p style="margin-top:16px;font-size:12px;color:#94a3b8;">Purpose included in calendar invite: ${pending.purpose || 'Intro call'} — Google event ${calendarEventId} source ${source}</p>
