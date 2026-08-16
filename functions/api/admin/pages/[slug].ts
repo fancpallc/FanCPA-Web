@@ -1,4 +1,4 @@
-u soulhimport { requireAdminAuth, isAdminAuthenticated } from '../../../_lib/auth'
+import { requireAdminAuth, isAdminAuthenticated } from '../../../_lib/auth'
 import { getEnvironment } from '../../../_lib/env'
 
 export interface Env {
