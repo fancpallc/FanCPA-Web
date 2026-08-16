@@ -10,7 +10,7 @@ export interface Env {
 }
 
 /** Fields the owner may edit. `slug` and `id` are deliberately not among them. */
-const EDITABLE = ['site_name', 'footer_tagline', 'icon_url', 'title', 'meta_description'] as const
+const EDITABLE = ['site_name', 'footer_tagline', 'icon_url', 'title', 'meta_description', 'booking_max_per_week'] as const
 
 /** Long enough for a name or a sentence; short enough that the header cannot be broken. */
 const MAX_LENGTH: Record<(typeof EDITABLE)[number], number> = {
@@ -19,6 +19,7 @@ const MAX_LENGTH: Record<(typeof EDITABLE)[number], number> = {
   icon_url: 2_000,
   title: 70,
   meta_description: 160,
+  booking_max_per_week: 10,
 }
 
 /**
@@ -71,6 +72,11 @@ export const onRequestPut: PagesFunction<Env> = async ({ request, env, params })
     if ((field === 'site_name' || field === 'title') && typeof value === 'string' && !value.trim()) {
       return new Response(JSON.stringify({ error: `${field === 'site_name' ? 'Your site name' : 'The browser tab title'} cannot be empty` }), { status: 400, headers })
     }
+    if (field === 'booking_max_per_week') {
+       if (isNaN(parseInt(value))) {
+         return new Response(JSON.stringify({ error: 'Booking limit must be a number' }), { status: 400, headers })
+       }
+    }
   }
 
   try {
@@ -82,7 +88,10 @@ export const onRequestPut: PagesFunction<Env> = async ({ request, env, params })
     }
 
     const assignments = patch.map((f) => `${f} = ?`).join(', ')
-    const values = patch.map((f) => (typeof body[f] === 'string' ? body[f].trim() : body[f]))
+    const values = patch.map((f) => {
+        if (f === 'booking_max_per_week') return parseInt(body[f])
+        return typeof body[f] === 'string' ? body[f].trim() : body[f]
+    })
     await db.prepare(`UPDATE pages SET ${assignments}, updated_at = datetime('now') WHERE slug = ?`).bind(...values, slug).run()
 
     const updated = await db.prepare('SELECT * FROM pages WHERE slug = ?').bind(slug).first()
@@ -94,3 +103,4 @@ export const onRequestPut: PagesFunction<Env> = async ({ request, env, params })
     return new Response(JSON.stringify({ error: `Failed to update page: ${e?.message}` }), { status: 500, headers })
   }
 }
+
