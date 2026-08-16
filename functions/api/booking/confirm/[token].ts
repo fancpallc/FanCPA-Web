@@ -264,7 +264,31 @@ export const onRequestGet: PagesFunction<Env> = async ({ params, env, request })
         <div style="margin-top:24px;display:flex;gap:12px;flex-wrap:wrap;">
           <a href="${meetLink}" target="_blank" style="padding:12px 24px;background:#0f172a;color:white;border-radius:999px;text-decoration:none;font-weight:600;font-size:14px;">Open Meet →</a>
           <a href="/" style="padding:12px 24px;background:white;border:1px solid #e2e8f0;border-radius:999px;text-decoration:none;color:#0f172a;font-weight:600;font-size:14px;">Back to home</a>
-          <button onclick="(() => { const data = \`BEGIN:VCALENDAR\nVERSION:2.0\nPRODID:-//FanCPA//Meeting//EN\nBEGIN:VEVENT\nSUMMARY:Meeting with ${pending.first_name} ${pending.last_name}\nDESCRIPTION:${pending.purpose || 'Intro call'}\nDTSTART:${new Date(pending.slot_start).toISOString().replace(/[-:]/g, '').split('.')[0]}Z\nDTEND:${new Date(pending.slot_end).toISOString().replace(/[-:]/g, '').split('.')[0]}Z\nLOCATION:${meetLink}\nEND:VEVENT\nEND:VCALENDAR\`; const blob = new Blob([data], { type: 'text/calendar' }); const url = URL.createObjectURL(blob); const a = document.createElement('a'); a.href = url; a.download = 'meeting.ics'; a.click(); })()" style="padding:12px 24px;background:white;border:1px solid #e2e8f0;border-radius:999px;text-decoration:none;color:#0f172a;font-weight:600;font-size:14px;cursor:pointer;">Download .ics</button>
+          <button onclick="(() => {
+            const formatDate = (date) => date.toISOString().replace(/[-:]/g, '').split('.')[0] + 'Z';
+            const data = [
+              'BEGIN:VCALENDAR',
+              'VERSION:2.0',
+              'PRODID:-//FanCPA//Meeting//EN',
+              'BEGIN:VEVENT',
+              'SUMMARY:Meeting with ${pending.first_name} ${pending.last_name}',
+              'DESCRIPTION:${pending.purpose || 'Intro call'}',
+              'DTSTART:' + formatDate(new Date('${pending.slot_start}')),
+              'DTEND:' + formatDate(new Date('${pending.slot_end}')),
+              'LOCATION:${meetLink}',
+              'END:VEVENT',
+              'END:VCALENDAR'
+            ].join('\\r\\n');
+            const blob = new Blob([data], { type: 'text/calendar;charset=utf-8' });
+            const url = URL.createObjectURL(blob);
+            const a = document.createElement('a');
+            a.href = url;
+            a.download = 'meeting.ics';
+            document.body.appendChild(a);
+            a.click();
+            document.body.removeChild(a);
+            URL.revokeObjectURL(url);
+          })()" style="padding:12px 24px;background:white;border:1px solid #e2e8f0;border-radius:999px;text-decoration:none;color:#0f172a;font-weight:600;font-size:14px;cursor:pointer;">Download .ics</button>
         </div>
         <p style="margin-top:16px;font-size:12px;color:#94a3b8;">Purpose included in calendar invite: ${pending.purpose || 'Intro call'} — Google event ${calendarEventId} source ${source}</p>
       </div>
