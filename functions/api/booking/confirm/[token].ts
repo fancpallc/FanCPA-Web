@@ -212,7 +212,7 @@ export const onRequestGet: PagesFunction<Env> = async ({ params, env, request })
       timeZoneName: 'short',
     })
 
-    const cancelUrl = `${siteUrl}/api/cancel/${cancelToken}`
+    const cancelUrl = `${new URL(request.url).origin}/api/cancel/${cancelToken}`
     console.log(`!!! CONFIRM_FINAL_EMAIL_SEND to=${pending.email} meetLink=${meetLink} purpose=${pending.purpose || 'none'}`)
 
     const emailResult = await sendConfirmationEmail({
