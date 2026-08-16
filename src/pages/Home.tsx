@@ -163,6 +163,8 @@ export function Home() {
                       if (result.emailResult && !result.emailResult.success) debug(`!!! HOME_BOOKING_EMAIL_ERROR ${result.emailResult.error}`)
 
                       const emailToDisplay = result.email || result.emailResult?.email || 'your email address'
+                      console.log('!!! result', result)
+                      console.log('!!! slot', selectedSlot)
 
                       setBookingResult({ ...result, email: emailToDisplay })
                       // Optimistic removal so slot disappears immediately without reload
@@ -180,10 +182,19 @@ export function Home() {
                 {bookingResult && (
                   <div className="card rounded-2xl p-6 bg-amber-50 border-amber-300 text-center">
                     <h3 className="font-black text-xl mb-3 text-amber-900">Booking Requested</h3>
-                    <p className="text-sm mb-2">{bookingResult.dateTime}</p>
+                    <p className="text-sm mb-2">
+                      Thank you for scheduling: {new Date(selectedSlot.start).toLocaleString('en-US', {
+                        weekday: 'long',
+                        month: 'long',
+                        day: 'numeric',
+                        hour: 'numeric',
+                        minute: '2-digit',
+                        timeZone: timeZone,
+                      })} ({timeZone})
+                    </p>
                     {bookingResult.purpose && <p className="text-sm mb-2">Purpose: <strong>{bookingResult.purpose}</strong></p>}
-                    <p className="text-sm mb-6 text-amber-900">
-                      A confirmation email is on its way, please check your inbox at <strong>{bookingResult.emailResult?.email || bookingResult.email || 'your email address'}</strong>.
+                    <p className="text-sm mb-4 text-amber-900">
+                      A confirmation email is on its way, <strong>please check {bookingResult.emailResult?.email || bookingResult.email || 'your email address'} inbox to confirm this appointment.</strong>
                     </p>
                   </div>
                 )}
