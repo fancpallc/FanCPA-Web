@@ -102,12 +102,12 @@ describe('BookingForm — first_name, last_name, email, phone, purpose + Turnsti
     fireEvent.click(screen.getByRole('button', { name: /book this time/i }))
 
     await waitFor(() => {
-      expect(screen.getByText(/Meeting Confirmed/i)).toBeInTheDocument()
+      expect(screen.getByText(/Booking Requested/i)).toBeInTheDocument()
     })
-    expect(screen.getByRole('button', { name: /Download invite.*\.ics/i })).toBeInTheDocument()
+    expect(screen.queryByRole('button', { name: /Download invite.*\.ics/i })).not.toBeInTheDocument()
   })
 
-  it('should embed cancel link in Cancel meeting button, not as raw link text', async () => {
+  it('should not contain Cancel meeting button after success', async () => {
     const { fireEvent } = await import('@testing-library/react')
     vi.mocked(createBooking).mockResolvedValue({
       meetLink: 'https://meet.google.com/abc-defg-hij',
@@ -123,15 +123,12 @@ describe('BookingForm — first_name, last_name, email, phone, purpose + Turnsti
 
     fireEvent.click(screen.getByRole('button', { name: /book this time/i }))
 
-    await waitFor(() => screen.getByText(/Meeting Confirmed/i))
-    const cancelBtn = screen.getByRole('link', { name: /Cancel meeting/i })
-    expect(cancelBtn).toBeInTheDocument()
-    expect(cancelBtn.getAttribute('href')).toContain('/api/cancel/')
-    // Old behavior Cancel: <a>fullURL</a> should not exist
-    expect(document.body.innerHTML).not.toMatch(/Cancel:.*https:\/\/alpha\.profile-webapp\.pages\.dev\/api\/cancel\/token123/)
+    await waitFor(() => screen.getByText(/Booking Requested/i))
+    const cancelBtn = screen.queryByRole('link', { name: /Cancel meeting/i })
+    expect(cancelBtn).not.toBeInTheDocument()
   })
 
-  it('should have Book another and Open Meet buttons with more padding (not px-5 py-2 text close to border)', async () => {
+  it('should have only Close button after success', async () => {
     const { fireEvent } = await import('@testing-library/react')
     vi.mocked(createBooking).mockResolvedValue({
       meetLink: 'https://meet.google.com/abc-defg-hij',
@@ -139,7 +136,7 @@ describe('BookingForm — first_name, last_name, email, phone, purpose + Turnsti
       cancelUrl: 'https://alpha.profile-webapp.pages.dev/api/cancel/token123',
     } as any)
 
-    render(<BookingForm slot={slot} onSuccess={vi.fn()} timeZone={timeZone} />)
+    render(<BookingForm slot={slot} onSuccess={vi.fn()} timeZone={timeZone} onCancel={vi.fn()} />)
 
     fireEvent.change(screen.getByLabelText(/first name/i), { target: { value: 'Jane' } })
     fireEvent.change(screen.getByLabelText(/last name/i), { target: { value: 'Doe' } })
@@ -147,10 +144,11 @@ describe('BookingForm — first_name, last_name, email, phone, purpose + Turnsti
 
     fireEvent.click(screen.getByRole('button', { name: /book this time/i }))
 
-    await waitFor(() => screen.getByText(/Meeting Confirmed/i))
+    await waitFor(() => screen.getByText(/Booking Requested/i))
     const buttons = screen.getAllByRole('button')
-    const hasPadding = buttons.some((b) => b.className.includes('px-6') && b.className.includes('py-3'))
-    expect(hasPadding).toBe(true)
+    // Should only find the 'Close' button in the success state
+    expect(buttons.length).toBe(1)
+    expect(buttons[0]).toHaveTextContent(/Close/i)
   })
 })
 
