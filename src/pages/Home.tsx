@@ -165,6 +165,7 @@ export function Home() {
                       if (result.emailResult && !result.emailResult.success) debug(`!!! HOME_BOOKING_EMAIL_ERROR ${result.emailResult.error}`)
 
                       const emailToDisplay = result.emailResult?.email || selectedSlot.email
+                      console.log('!!! result:', result)
                       console.log('!!! HOME_BOOKING_EMAIL_TO_DISPLAY:', emailToDisplay)
 
                       setBookingResult({ ...result, email: emailToDisplay })
