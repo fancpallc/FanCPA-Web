@@ -64,6 +64,7 @@ export const onRequestPost: PagesFunction<Env> = async ({ request, env }) => {
     const email = String(body.email || '').trim().toLowerCase()
     const phone = body.phone ? String(body.phone).trim() : undefined
     const purpose = body.purpose ? String(body.purpose).trim() : undefined
+    const timeZone = body.timeZone ? String(body.timeZone).trim() : undefined
     const slot = body.slot as { date?: string; start: string; end: string; available?: boolean } | undefined
     const turnstileToken = String(body.turnstileToken || body.turnstile_token || '').trim()
 
@@ -241,7 +242,7 @@ export const onRequestPost: PagesFunction<Env> = async ({ request, env }) => {
     const siteUrl = `${url.protocol}//${url.host}`
     
     const dateTimeEt = new Date(slot.start).toLocaleString('en-US', {
-      timeZone: env?.TIMEZONE || TIMEZONE,
+      timeZone: timeZone || env?.TIMEZONE || TIMEZONE,
       weekday: 'long',
       year: 'numeric',
       month: 'long',
@@ -253,9 +254,9 @@ export const onRequestPost: PagesFunction<Env> = async ({ request, env }) => {
 
     try {
       const stmt = db.prepare(
-        'INSERT INTO pending_bookings (contact_id, first_name, last_name, email, phone, purpose, slot_date, slot_start, slot_end, confirm_token, expires_at, created_at) VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10, ?11, datetime("now"))'
+        'INSERT INTO pending_bookings (contact_id, first_name, last_name, email, phone, purpose, slot_date, slot_start, slot_end, confirm_token, expires_at, created_at, time_zone) VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10, ?11, datetime("now"), ?12)'
       )
-      await stmt.bind(contactId, firstName, lastName, email, phone || null, purpose || null, slot.date || slot.start.split('T')[0], slot.start, slot.end, confirmToken, expiresAt).run()
+      await stmt.bind(contactId, firstName, lastName, email, phone || null, purpose || null, slot.date || slot.start.split('T')[0], slot.start, slot.end, confirmToken, expiresAt, timeZone || null).run()
       console.log('!!! BOOKING_PENDING_RECORD_OK')
     } catch (e: any) {
       console.log(`!!! BOOKING_PENDING_RECORD_ERROR ${e?.message}`)

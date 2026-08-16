@@ -200,7 +200,8 @@ export const onRequestGet: PagesFunction<Env> = async ({ params, env, request })
 
     // Send final confirmation email with Meet link + purpose + cancel
     const dateTimeEt = new Date(pending.slot_start).toLocaleString('en-US', {
-      timeZone: env?.TIMEZONE || TIMEZONE,
+
+      timeZone: pending.time_zone || env?.TIMEZONE || TIMEZONE,
       weekday: 'long',
       year: 'numeric',
       month: 'long',

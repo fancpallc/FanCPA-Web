@@ -174,6 +174,7 @@ export function BookingForm({ slot, onSuccess, onCancel, timeZone }: BookingForm
         slot,
         turnstileToken,
         confirmIntent: intentOverride ?? confirmIntent,
+        timeZone,
       })
       debug(`!!! BOOKING_FORM_API_RESULT warning=${!!(result as any).warning} pending=${!!(result as any).pending} meetLink=${result.meetLink} source=${result.source} gcalError=${result.gcalError || 'none'} emailSuccess=${result.emailResult?.success}`)
       // Handle duplicate warning same email this week — token is consumed by first verify, need new token for confirm
