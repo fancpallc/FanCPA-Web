@@ -182,11 +182,31 @@ export function Home() {
                 {bookingResult && (
                   <div className="card rounded-2xl p-6 bg-amber-50 border-amber-300 text-center">
                     <h3 className="font-black text-xl mb-3 text-amber-900">Booking Requested</h3>
-                    <p className="text-sm mb-2">Thank you for scheduling a time from {bookingResult.dateTime}.</p>
+                    <p className="text-sm mb-2">
+                      Thank you for scheduling: {new Date(selectedSlot.start).toLocaleString('en-US', {
+                        weekday: 'long',
+                        month: 'long',
+                        day: 'numeric',
+                        hour: 'numeric',
+                        minute: '2-digit',
+                      })}
+                    </p>
                     {bookingResult.purpose && <p className="text-sm mb-2">Purpose: <strong>{bookingResult.purpose}</strong></p>}
                     <p className="text-sm mb-6 text-amber-900">
                       A confirmation email is on its way, <strong>please check {bookingResult.emailResult?.email || bookingResult.email || 'your email address'} inbox to confirm this appointment.</strong>
                     </p>
+                    <button
+                      onClick={() => downloadIcsFile(generateIcsContent({
+                        title: `Meeting with ${bookingResult.purpose || 'Client'}`,
+                        description: bookingResult.purpose || 'Intro call',
+                        start: selectedSlot.start,
+                        end: selectedSlot.end,
+                        location: bookingResult.meetLink
+                      }), 'meeting.ics')}
+                      className="text-xs text-amber-800 underline hover:text-amber-900"
+                    >
+                      Download .ics
+                    </button>
                   </div>
                 )}
               </div>
