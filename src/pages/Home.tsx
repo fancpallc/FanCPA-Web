@@ -156,17 +156,13 @@ export function Home() {
                     timeZone={timeZone}
                     onSuccess={(result) => {
                       debug(`!!! HOME_BOOKING_SUCCESS slot=${selectedSlot.start} removing optimistic + refetching calendar with cache bust`)
-                      console.log('!!! HOME_BOOKING_SUCCESS result:', result)
-                      console.log('!!! HOME_BOOKING_SUCCESS selectedSlot:', selectedSlot)
 
                       // The visitor sees plain-English copy; the vendor's own wording is
                       // only useful to whoever has to fix the integration.
                       if (result.gcalError) debug(`!!! HOME_BOOKING_GCAL_ERROR ${result.gcalError}`)
                       if (result.emailResult && !result.emailResult.success) debug(`!!! HOME_BOOKING_EMAIL_ERROR ${result.emailResult.error}`)
 
-                      const emailToDisplay = result.emailResult?.email || selectedSlot.email
-                      console.log('!!! result:', result)
-                      console.log('!!! HOME_BOOKING_EMAIL_TO_DISPLAY:', emailToDisplay)
+                      const emailToDisplay = result.email || result.emailResult?.email || 'your email address'
 
                       setBookingResult({ ...result, email: emailToDisplay })
                       // Optimistic removal so slot disappears immediately without reload
