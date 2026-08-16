@@ -45,7 +45,7 @@ export function Home() {
   const { grouped, loading: calLoading, error: calError, slotMinutes, excludeToday, refetch: refetchCalendar, removeSlot } = useCalendar(2)
   const [selectedDate, setSelectedDate] = useState<string | null>(null)
   const [selectedSlot, setSelectedSlot] = useState<any>(null)
-  const [bookingResult, setBookingResult] = useState<{ meetLink: string; dateTime: string; cancelUrl: string; source?: string; gcalError?: string; emailResult?: any; purpose?: string | null } | null>(null)
+  const [bookingResult, setBookingResult] = useState<{ meetLink: string; dateTime: string; cancelUrl: string; source?: string; gcalError?: string; emailResult?: any; email?: string; purpose?: string | null } | null>(null)
   const [timeZone, setTimeZone] = useState(Intl.DateTimeFormat().resolvedOptions().timeZone)
 
   const selectedSlots = useMemo(() => {
@@ -160,7 +160,7 @@ export function Home() {
                       // only useful to whoever has to fix the integration.
                       if (result.gcalError) debug(`!!! HOME_BOOKING_GCAL_ERROR ${result.gcalError}`)
                       if (result.emailResult && !result.emailResult.success) debug(`!!! HOME_BOOKING_EMAIL_ERROR ${result.emailResult.error}`)
-                      setBookingResult(result)
+                      setBookingResult({ ...result, email: selectedSlot.email })
                       // Optimistic removal so slot disappears immediately without reload
                       removeSlot(selectedSlot)
                       // Refetch with cache bust + short delay for Google FreeBusy propagation
@@ -179,7 +179,7 @@ export function Home() {
                     <p className="text-sm mb-2">{bookingResult.dateTime}</p>
                     {bookingResult.purpose && <p className="text-sm mb-2">Purpose: <strong>{bookingResult.purpose}</strong></p>}
                     <p className="text-sm mb-6 text-amber-900">
-                      A confirmation email is on its way, please check your inbox at <strong>{bookingResult.emailResult?.email || 'your email address'}</strong>.
+                      A confirmation email is on its way, please check your inbox at <strong>{bookingResult.emailResult?.email || bookingResult.email || 'your email address'}</strong>.
                     </p>
                   </div>
                 )}
