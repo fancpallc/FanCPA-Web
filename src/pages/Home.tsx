@@ -94,13 +94,13 @@ export function Home() {
         </div>
       )}
 
+      {/* Adding a bottom margin to align spacing with previous section if needed,
+          using same py-20 lg:py-24 pattern found in section rendering */}
       <section id="calendar" className="py-20 lg:py-24 bg-slate-50 border-t">
         <div className="max-w-5xl mx-auto px-6">
-          <div className="max-w-3xl mx-auto text-center mb-10">
+          <div className="max-w-3xl mx-auto text-center mb-16">
             <h2 className="text-3xl lg:text-4xl font-black tracking-tight mb-4" style={{ fontFamily: 'Playfair Display, serif' }}>Book a meeting</h2>
-            {/* The calendar itself states the slot length, timezone and booking window —
-                repeating them here read as five copies of the same sentence. */}
-            <p className="text-gray-600 leading-relaxed">Pick a time that works for you. No pitch, just practical next steps.</p>
+            <p className="text-gray-600 leading-relaxed text-lg">Pick a time that works for you. No pitch, just practical next steps.</p>
           </div>
 
           {calLoading ? (
@@ -203,8 +203,6 @@ export function Home() {
           )}
         </div>
       </section>
-
-      <ManageBookings />
     </div>
   )
 }
