@@ -526,6 +526,14 @@ export async function createBookingEvent(env: any, params: CreateEventParams): P
       description: `${params.purpose || 'Intro call'}\n\nContact: ${params.email} ${params.phone || ''}\n\nCancel: ${siteUrl}/api/cancel/${params.cancelToken}`,
       start: { dateTime: params.slot.start, timeZone: TIMEZONE },
       end: { dateTime: params.slot.end, timeZone: TIMEZONE },
+      reminders: {
+        useDefault: false,
+        overrides: [
+          { method: 'email', minutes: 1440 },
+          { method: 'email', minutes: 60 },
+          { method: 'popup', minutes: 30 },
+        ],
+      },
       conferenceData: {
         createRequest: {
           requestId: params.cancelToken,

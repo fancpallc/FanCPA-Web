@@ -203,8 +203,6 @@ export function Home() {
           )}
         </div>
       </section>
-
-      <ManageBookings />
     </div>
   )
 }

@@ -659,7 +659,6 @@ export function Admin() {
                   <CalendarView grouped={calendarSlots} selectedDate={null} onDateSelect={() => {}} excludeToday={excludeToday} slotMinutes={slotMinutes} timeZone={timeZone} setTimeZone={setTimeZone} />
                 </div>
               </section>
-              <ManageBookings />
             </div>
           </div>
         </main>
