@@ -158,11 +158,6 @@ export function CalendarView({ grouped, selectedDate, onDateSelect, timeZone, se
                       Today
                     </div>
                   ) : null}
-                  {isToday && excludeToday && (
-                    <div className="mt-2 px-3 py-1 rounded-full text-[9px] bg-amber-100 border border-amber-200 text-amber-700 leading-none">
-                      No bookings today
-                    </div>
-                  )}
                   {/* At 393px a cell is ~35px wide, so "16 slots" / "Weekend" used to
                       spill across the cell borders into the neighbouring days. The full
                       wording lives in the button's aria-label either way. */}
