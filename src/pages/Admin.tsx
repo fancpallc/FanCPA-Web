@@ -364,7 +364,7 @@ export function Admin() {
                 </div>
               </div>
               <div>
-                <div className="editor-chrome text-[11px] text-gray-500 mb-1">Minimum notice days (0 = same day)</div>
+                <div className="editor-chrome text-[11px] text-gray-500 mb-1">Minimum notice days (0 = no meeting same day)</div>
                 <div className="text-sm">
                   <EditableText
                     value={String(content.page?.booking_min_notice_days ?? 0)}
