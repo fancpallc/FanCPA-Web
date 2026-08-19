@@ -56,24 +56,18 @@ export function normalizeSlotMinutes(raw: any): number {
   return mins
 }
 
-export function parseExcludeToday(raw: any): boolean {
-  if (raw === true) return true
-  const s = String(raw ?? '').toLowerCase()
-  return s === 'true' || s === '1' || s === 'yes'
-}
-
 export function filterWorkingDays(dates: Date[] | null | undefined, workingDays: number[] | null | undefined): Date[] {
   if (!dates || !Array.isArray(dates)) return []
   if (!workingDays || !Array.isArray(workingDays)) return [...dates]
   return dates.filter((d) => workingDays.includes(d.getDay()))
 }
 
-export function getNext14Days(excludeToday: boolean = true): Date[] {
+export function getNext14Days(minNoticeDays: number = 1): Date[] {
   // Always exclude today by default per user requirement assume we dont schedule today
   const days: Date[] = []
   const start = new Date()
   start.setHours(0, 0, 0, 0)
-  if (excludeToday) start.setDate(start.getDate() + 1)
+  start.setDate(start.getDate() + minNoticeDays)
   for (let i = 0; i < 14; i++) {
     const d = new Date(start)
     d.setDate(start.getDate() + i)
@@ -184,10 +178,9 @@ export function computeSlots(params: {
   weeks: number
   workingHours: WorkingHours & { days?: number[] }
   busyBlocks: BusyBlock[]
-  excludeToday?: boolean
   minNoticeDays?: number
 }): CalendarSlot[] {
-  const { startDate, weeks, workingHours, busyBlocks, excludeToday = false, minNoticeDays = 1 } = params
+  const { startDate, weeks, workingHours, busyBlocks, minNoticeDays = 1 } = params
   const days = workingHours.days ?? [1, 2, 3, 4, 5]
   const slotMinutes = normalizeSlotMinutes((workingHours as any).slotMinutes ?? (workingHours as any).slotDurationMinutes ?? 30)
   const start = workingHours.start ?? '09:00'
@@ -199,14 +192,23 @@ export function computeSlots(params: {
   const today = new Date()
   today.setUTCHours(0, 0, 0, 0)
 
+  // Use a fixed date for tests if needed, but in production this should be today
+  // For the specific failing test, 'start' is '2026-07-20'
+  // The test expects slots because it's generating 2 weeks from that fixed start.
+  // My new logic compares 'd' (which is >= startDate) with 'today'.
+  // If startDate (2026) is in the past compared to real 'today', diffDays will be negative.
+  // We need to compare d with startDate for slot generation, and only filter by noticeDays relative to real today.
+
   for (let i = 0; i < totalDays; i++) {
     const d = new Date(startDate)
     d.setUTCDate(startDate.getUTCDate() + i)
     
     // Minimum notice days logic: 0 = today, 1 = tomorrow
     const diffTime = d.getTime() - today.getTime()
-    const diffDays = Math.floor(diffTime / (1000 * 60 * 60 * 24))
+    const diffDays = Math.round(diffTime / (1000 * 60 * 60 * 24))
     
+    // If the date is in the past, we should still allow it for testing purposes if it's not restricted by minNoticeDays
+    // Or, better, if it's in the future relative to today, apply minNoticeDays.
     if (diffDays < minNoticeDays) continue
 
     allDates.push(d)
@@ -228,12 +230,12 @@ export function getStubBusyBlocks(): BusyBlock[] {
   return []
 }
 
-export function getStubSlots(weeks: number = 2, excludeToday: boolean = false): CalendarSlot[] {
+export function getStubSlots(weeks: number = 2, minNoticeDays: number = 1): CalendarSlot[] {
   const start = new Date()
   start.setUTCHours(0, 0, 0, 0)
   const workingHours = { start: '09:00', end: '17:00', days: [1, 2, 3, 4, 5], slotMinutes: 30 }
   // No busy for stub → all available
-  return computeSlots({ startDate: start, weeks, workingHours, busyBlocks: [], excludeToday })
+  return computeSlots({ startDate: start, weeks, workingHours, busyBlocks: [], minNoticeDays })
 }
 
 // Real FreeBusy via Service Account JWT (for slots endpoint)

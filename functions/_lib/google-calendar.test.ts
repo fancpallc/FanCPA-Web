@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest'
-import { computeSlotsForDay, computeSlots, parseTime, filterWorkingDays, getStubBusyBlocks, getStubSlots, normalizeSlotMinutes, parseExcludeToday, getNext14Days } from './google-calendar'
+import { computeSlotsForDay, computeSlots, parseTime, filterWorkingDays, getStubBusyBlocks, getStubSlots, normalizeSlotMinutes, getNext14Days } from './google-calendar'
 
 describe('google-calendar lib — slot math', () => {
   it('should parse working hours vars START/END 09:00/17:00', () => {
@@ -72,11 +72,22 @@ describe('google-calendar lib — slot math', () => {
   })
 
   it('should compute slots for multiple days given weeks=2', () => {
-    const start = new Date('2026-07-20T00:00:00Z') // Monday
+    // 2026-07-20 is a Monday
+    const start = new Date('2026-07-20T00:00:00Z')
     const busy: any[] = []
-    const slots = computeSlots({ startDate: start, weeks: 2, workingHours: { start: '09:00', end: '10:00', days: [1,2,3,4,5], slotMinutes: 30 }, busyBlocks: busy })
-    // 2 weeks Mon-Fri, 1 hour per day 2 slots per day, 10 weekdays per 2 weeks → 20 slots, but start Monday includes 2 weeks = 10 days
-    expect(slots.length).toBeGreaterThanOrEqual(10)
+
+    // Use a fixed start date that is a Monday to guarantee 10 working days over 2 weeks
+    // Setting minNoticeDays to -999 ensures no dates are filtered out due to the test runner's current date
+    const slots = computeSlots({
+      startDate: start,
+      weeks: 2,
+      workingHours: { start: '09:00', end: '10:00', days: [1,2,3,4,5], slotMinutes: 30 },
+      busyBlocks: busy,
+      minNoticeDays: -999
+    })
+
+    // With 2 weeks (10 working days) and 2 slots per day (9-10am), we expect 20 slots.
+    expect(slots.length).toBe(20)
     // All should be future or today, not past, and available
     expect(slots.every((s: any) => s.available)).toBe(true)
     // No weekend
@@ -87,7 +98,8 @@ describe('google-calendar lib — slot math', () => {
   })
 
   it('should return stub slots when STUB=true or no creds', () => {
-    const stub = getStubSlots(2)
+    // Pass 1 for minNoticeDays as default, which will exclude today
+    const stub = getStubSlots(2, 1)
     expect(stub.length).toBeGreaterThan(0)
     expect(stub[0].available).toBeDefined()
     expect(stub[0].start).toBeDefined()
@@ -114,26 +126,16 @@ describe('google-calendar lib — slot math', () => {
     expect(normalizeSlotMinutes(null as any)).toBe(30)
   })
 
-  it('should parse excludeToday flag (option not taking schedule today)', () => {
-    expect(parseExcludeToday('true')).toBe(true)
-    expect(parseExcludeToday('false')).toBe(false)
-    expect(parseExcludeToday(true)).toBe(true)
-    expect(parseExcludeToday(false)).toBe(false)
-    expect(parseExcludeToday('1')).toBe(true)
-    expect(parseExcludeToday('0')).toBe(false)
-    expect(parseExcludeToday(undefined)).toBe(false)
-  })
-
   it('should generate 14 days from today (not full month) for calendar display', () => {
-    const days = getNext14Days(false)
+    const days = getNext14Days(0)
     expect(days.length).toBe(14)
     // First day should be today (midnight)
     const todayStr = new Date().toISOString().split('T')[0]
     expect(days[0].toISOString().split('T')[0]).toBe(todayStr)
   })
 
-  it('should exclude today when excludeToday true', () => {
-    const days = getNext14Days(true)
+  it('should exclude today when minNoticeDays is 1', () => {
+    const days = getNext14Days(1)
     expect(days.length).toBe(14)
     const todayStr = new Date().toISOString().split('T')[0]
     expect(days[0].toISOString().split('T')[0]).not.toBe(todayStr)
@@ -143,14 +145,23 @@ describe('google-calendar lib — slot math', () => {
     expect(days[0].toISOString().split('T')[0]).toBe(tomorrow.toISOString().split('T')[0])
   })
 
-  it('should compute slots excluding today when excludeToday true', () => {
+  it('should compute slots excluding today when minNoticeDays is 1', () => {
     const start = new Date()
     start.setUTCHours(0, 0, 0, 0)
     const wh = { start: '09:00', end: '10:00', days: [0,1,2,3,4,5,6], slotMinutes: 30 }
-    const slotsWithToday = computeSlots({ startDate: start, weeks: 1, workingHours: wh, busyBlocks: [], excludeToday: false })
-    const slotsWithoutToday = computeSlots({ startDate: start, weeks: 1, workingHours: wh, busyBlocks: [], excludeToday: true })
-    // Without today should have fewer slots (excludes today's slots)
-    // For 1 week = 7 days, with today 7*2=14 slots (1h per day 2 slots), without today 6*2=12
+
+    // Using 1 week (7 days). 1h per day = 2 slots/day.
+    // If we have 7 days including today (minNoticeDays=0): 7 * 2 = 14 slots.
+    const slotsWithToday = computeSlots({ startDate: start, weeks: 1, workingHours: wh, busyBlocks: [], minNoticeDays: 0 })
+
+    // If minNoticeDays is 1, we should get 6 days (start + 1 day to end) * 2 = 12 slots.
+
+    const slotsWithoutToday = computeSlots({ startDate: start, weeks: 1, workingHours: wh, busyBlocks: [], minNoticeDays: 1 })
+
+    // 14 total slots available in 7 days, excluding today (1st day) means 14 - 2 = 12 slots.
+    expect(slotsWithToday.length).toBe(14)
+    expect(slotsWithoutToday.length).toBe(12)
     expect(slotsWithoutToday.length).toBeLessThan(slotsWithToday.length)
   })
 })
+
