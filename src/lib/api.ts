@@ -25,6 +25,9 @@ export interface Page {
   footer_tagline?: string | null
   /** Optional icon/logo URL. */
   icon_url?: string | null
+  booking_max_per_week?: number | null
+  booking_min_notice_days?: number | null
+  google_tag_manager_id?: string | null
   sort_order: number
   is_published: number
 }

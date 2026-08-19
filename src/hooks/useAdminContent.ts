@@ -40,6 +40,7 @@ export interface AdminPage {
   footer_tagline?: string | null
   icon_url?: string | null
   booking_max_per_week?: number | null
+  booking_min_notice_days?: number | null
   google_tag_manager_id?: string | null
 }
 

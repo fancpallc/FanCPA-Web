@@ -364,6 +364,19 @@ export function Admin() {
                 </div>
               </div>
               <div>
+                <div className="editor-chrome text-[11px] text-gray-500 mb-1">Minimum notice days (n = can see schedule n days after today)</div>
+                <div className="text-sm">
+                  <EditableText
+                    value={String(content.page?.booking_min_notice_days ?? 0)}
+                    onSave={async (v) => { try { await content.updatePage({ booking_min_notice_days: parseInt(v) }) } catch (e: any) { setGlobalError(e?.message); throw e } }}
+                    placeholder="0"
+                    required
+                    ariaLabel="Minimum notice days"
+                    displayClassName="text-sm"
+                  />
+                </div>
+              </div>
+              <div>
                 <div className="editor-chrome text-[11px] text-gray-500 mb-1">Search description — the grey text under your Google result</div>
                 <div className="text-sm text-gray-600">
                   <EditableText
