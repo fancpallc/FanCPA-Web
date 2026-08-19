@@ -185,8 +185,9 @@ export function computeSlots(params: {
   workingHours: WorkingHours & { days?: number[] }
   busyBlocks: BusyBlock[]
   excludeToday?: boolean
+  minNoticeDays?: number
 }): CalendarSlot[] {
-  const { startDate, weeks, workingHours, busyBlocks, excludeToday = false } = params
+  const { startDate, weeks, workingHours, busyBlocks, excludeToday = false, minNoticeDays = 1 } = params
   const days = workingHours.days ?? [1, 2, 3, 4, 5]
   const slotMinutes = normalizeSlotMinutes((workingHours as any).slotMinutes ?? (workingHours as any).slotDurationMinutes ?? 30)
   const start = workingHours.start ?? '09:00'
@@ -194,17 +195,20 @@ export function computeSlots(params: {
 
   const allDates: Date[] = []
   const totalDays = Math.max(1, weeks) * 7
+  
+  const today = new Date()
+  today.setUTCHours(0, 0, 0, 0)
+
   for (let i = 0; i < totalDays; i++) {
     const d = new Date(startDate)
     d.setUTCDate(startDate.getUTCDate() + i)
-    // Exclude today option — requirement 2: option not taking any schedule today
-    if (excludeToday) {
-      const todayStr = new Date().toISOString().split('T')[0]
-      const dStr = new Date(d).toISOString().split('T')[0]
-      if (dStr === todayStr) continue
-      // Also if startDate is today and i=0, skip
-      if (i === 0 && toDateString(d) === toDateString(new Date())) continue
-    }
+    
+    // Minimum notice days logic: 0 = today, 1 = tomorrow
+    const diffTime = d.getTime() - today.getTime()
+    const diffDays = Math.floor(diffTime / (1000 * 60 * 60 * 24))
+    
+    if (diffDays < minNoticeDays) continue
+
     allDates.push(d)
   }
 

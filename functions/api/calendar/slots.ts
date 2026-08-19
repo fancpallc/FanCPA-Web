@@ -13,6 +13,7 @@ export interface Env {
   WORKING_DAYS?: string // "1,2,3,4,5"
   SLOT_DURATION_MINUTES?: string // "30" — configurable, always multiple of 15
   EXCLUDE_TODAY?: string // "true" to not take any schedule today
+  MINIMUM_NOTICE_DAYS?: string // "0" to allow today, "1" for 1 day notice
   CALENDAR_EXCLUDE_TODAY?: string // alias
   ENVIRONMENT?: string
   SITE_URL?: string
@@ -46,9 +47,24 @@ export const onRequestGet: PagesFunction<Env> = async ({ request, env }) => {
     }
     console.log(`!!! SLOTS_PARAMS weeks=${weeks} url=${request.url}`)
 
+    // Get booking_min_notice_days from DB if configured
+    let dbMinNoticeDays = 0
+    if (env.DB) {
+      try {
+      const page = await env.DB.prepare('SELECT booking_min_notice_days FROM pages WHERE slug = "home"').first()
+      if (page && page.booking_min_notice_days !== null) {
+        dbMinNoticeDays = page.booking_min_notice_days
+      }
+      } catch (e) {
+        console.log(`!!! SLOTS_DB_ERROR ${e}`)
+    }
+    }
+
     // Default true per requirement assume dont schedule today (C1)
     const excludeToday = parseExcludeToday((env as any)?.EXCLUDE_TODAY ?? (env as any)?.CALENDAR_EXCLUDE_TODAY ?? 'true')
-
+    // Priority: env var > DB setting > default based on excludeToday
+    const envNotice = env?.MINIMUM_NOTICE_DAYS
+    const minNoticeDays = envNotice !== undefined ? parseInt(envNotice, 10) : dbMinNoticeDays
     const workingHours = {
       start: env?.WORKING_HOURS_START || '09:00',
       end: env?.WORKING_HOURS_END || '17:00',
@@ -56,8 +72,9 @@ export const onRequestGet: PagesFunction<Env> = async ({ request, env }) => {
       // Configurable, multiple of 15 per requirement
       slotMinutes: normalizeSlotMinutes(env?.SLOT_DURATION_MINUTES || '30'),
       excludeToday,
+      minNoticeDays,
     }
-    console.log(`!!! SLOTS_WORKING_HOURS start=${workingHours.start} end=${workingHours.end} days=${workingHours.days.join(',')} slotMinutes=${workingHours.slotMinutes} excludeToday=${excludeToday}`)
+    console.log(`!!! SLOTS_WORKING_HOURS start=${workingHours.start} end=${workingHours.end} days=${workingHours.days.join(',')} slotMinutes=${workingHours.slotMinutes} excludeToday=${excludeToday} minNoticeDays=${minNoticeDays}`)
 
     // FreeBusy — stub when no SA key or ENVIRONMENT test/local or STUB flag
     console.log('!!! SLOTS_FREEBUSY_CALL_START')
@@ -72,7 +89,7 @@ export const onRequestGet: PagesFunction<Env> = async ({ request, env }) => {
       slots = getStubSlots(weeks, excludeToday)
       // Override slot duration if custom (stub uses 30 default, but recompute with our workingHours)
       const { computeSlots } = await import('../../_lib/google-calendar')
-      slots = computeSlots({ startDate, weeks, workingHours, busyBlocks: [], excludeToday })
+      slots = computeSlots({ startDate, weeks, workingHours, busyBlocks: [], excludeToday, minNoticeDays })
       const now = new Date()
       slots = slots.filter((s: any) => new Date(s.end) > now)
     } else {
@@ -82,6 +99,7 @@ export const onRequestGet: PagesFunction<Env> = async ({ request, env }) => {
         workingHours,
         busyBlocks,
         excludeToday,
+        minNoticeDays,
       })
       const now = new Date()
       slots = slots.filter((s: any) => new Date(s.end) > now)
@@ -150,3 +168,4 @@ export const onRequestGet: PagesFunction<Env> = async ({ request, env }) => {
     )
   }
 }
+

@@ -79,6 +79,7 @@ export const onRequestGet: PagesFunction<Env> = async ({ request, env }) => {
           footer_tagline: (page as any).footer_tagline ?? null,
           icon_url: (page as any).icon_url ?? null,
           booking_max_per_week: (page as any).booking_max_per_week ?? 3,
+          booking_min_notice_days: (page as any).booking_min_notice_days ?? 0,
           google_tag_manager_id: (page as any).google_tag_manager_id ?? null,
         },
         sections: sectionsWithItems,
