@@ -49,12 +49,17 @@ export const onRequestGet: PagesFunction<Env> = async ({ request, env }) => {
 
     // Get booking_min_notice_days from DB if configured
     let dbMinNoticeDays = 0
+    let dbWorkingHours = { start: '09:00', end: '17:00' }
     if (env.DB) {
       try {
-      const page = await env.DB.prepare('SELECT booking_min_notice_days FROM pages WHERE slug = "home"').first()
-      if (page && page.booking_min_notice_days !== null) {
+      const page = await env.DB.prepare('SELECT booking_min_notice_days, working_hours_start, working_hours_end FROM pages WHERE slug = "home"').first()
+      if (page) {
+        if (page.booking_min_notice_days !== null) {
         dbMinNoticeDays = page.booking_min_notice_days
       }
+        if (page.working_hours_start) dbWorkingHours.start = page.working_hours_start
+        if (page.working_hours_end) dbWorkingHours.end = page.working_hours_end
+    }
       } catch (e) {
         console.log(`!!! SLOTS_DB_ERROR ${e}`)
     }
@@ -65,8 +70,8 @@ export const onRequestGet: PagesFunction<Env> = async ({ request, env }) => {
     const envNotice = env?.MINIMUM_NOTICE_DAYS
     const minNoticeDays = envNotice !== undefined ? parseInt(envNotice, 10) : dbMinNoticeDays
     const workingHours = {
-      start: env?.WORKING_HOURS_START || '09:00',
-      end: env?.WORKING_HOURS_END || '17:00',
+      start: env?.WORKING_HOURS_START || dbWorkingHours.start,
+      end: env?.WORKING_HOURS_END || dbWorkingHours.end,
       days: parseWorkingDays(env?.WORKING_DAYS),
       // Configurable, multiple of 15 per requirement
       slotMinutes: normalizeSlotMinutes(env?.SLOT_DURATION_MINUTES || '60'),
@@ -95,6 +100,8 @@ export const onRequestGet: PagesFunction<Env> = async ({ request, env }) => {
         workingHours,
         busyBlocks,
         minNoticeDays,
+        env,
+        page: { working_hours_start: workingHours.start, working_hours_end: workingHours.end }
       })
       const now = new Date()
       slots = slots.filter((s: any) => new Date(s.end) > now)

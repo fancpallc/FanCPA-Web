@@ -2,7 +2,29 @@ import { getBookingCalendarId, getPersonalCalendarId, getGcalServiceKey, hasOAut
 import { createBookingEventViaOAuth } from './google-oauth'
 
 export interface WorkingHours {
-  start: string // "09:00"
+// ... existing code ...
+import { getBookingCalendarId, getPersonalCalendarId, getGcalServiceKey, hasOAuthConfig, getWorkingHoursStart, getWorkingHoursEnd } from './env'
+import { createBookingEventViaOAuth } from './google-oauth'
+
+// ... existing code ...
+export function computeSlots(params: {
+  startDate: Date
+  weeks: number
+  workingHours: WorkingHours & { days?: number[] }
+  busyBlocks: BusyBlock[]
+  minNoticeDays?: number
+  env?: any
+  page?: any
+}): CalendarSlot[] {
+  const { startDate, weeks, workingHours, busyBlocks, minNoticeDays = 1, env, page } = params
+  const days = workingHours.days ?? [1, 2, 3, 4, 5]
+  const slotMinutes = normalizeSlotMinutes((workingHours as any).slotMinutes ?? (workingHours as any).slotDurationMinutes ?? 30)
+  const start = workingHours.start ?? page?.working_hours_start ?? getWorkingHoursStart(env)
+  const end = workingHours.end ?? page?.working_hours_end ?? getWorkingHoursEnd(env)
+
+  const allDates: Date[] = []
+  const totalDays = Math.max(1, weeks) * 7
+// ... existing code ...
   end: string // "17:00"
   days?: number[] // 0-6, 1=Mon ... 5=Fri
   slotMinutes?: number // 30
@@ -182,11 +204,11 @@ export function computeSlots(params: {
   busyBlocks: BusyBlock[]
   minNoticeDays?: number
 }): CalendarSlot[] {
-  const { startDate, weeks, workingHours, busyBlocks, minNoticeDays = 1 } = params
+  const { startDate, weeks, workingHours, busyBlocks, minNoticeDays = 1, env, page } = params
   const days = workingHours.days ?? [1, 2, 3, 4, 5]
   const slotMinutes = normalizeSlotMinutes((workingHours as any).slotMinutes ?? (workingHours as any).slotDurationMinutes ?? 30)
-  const start = workingHours.start ?? '09:00'
-  const end = workingHours.end ?? '17:00'
+  const start = workingHours.start ?? page?.working_hours_start ?? getWorkingHoursStart(env)
+  const end = workingHours.end ?? page?.working_hours_end ?? getWorkingHoursEnd(env)
 
   const allDates: Date[] = []
   const totalDays = Math.max(1, weeks) * 7
@@ -237,7 +259,7 @@ export function getStubSlots(weeks: number = 2, minNoticeDays: number = 1): Cale
   start.setUTCHours(0, 0, 0, 0)
   const workingHours = { start: '09:00', end: '17:00', days: [1, 2, 3, 4, 5], slotMinutes: 60 }
   // No busy for stub → all available
-  return computeSlots({ startDate: start, weeks, workingHours, busyBlocks: [], minNoticeDays })
+  return computeSlots({ startDate: start, weeks, workingHours, busyBlocks: [], minNoticeDays, env: {} })
 }
 
 // Real FreeBusy via Service Account JWT (for slots endpoint)

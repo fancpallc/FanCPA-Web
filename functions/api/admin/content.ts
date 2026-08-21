@@ -68,6 +68,9 @@ export const onRequestGet: PagesFunction<Env> = async ({ request, env }) => {
 
     console.log(`!!! ADMIN_CONTENT_SUCCESS sections=${sectionsWithItems.length} env=${envName}`)
 
+    // Fetch site config from pages table again if needed, or just use `page` object
+    // Wait, the `page` object is already fetched above.
+
     return new Response(
       JSON.stringify({
         page: {
@@ -80,6 +83,8 @@ export const onRequestGet: PagesFunction<Env> = async ({ request, env }) => {
           icon_url: (page as any).icon_url ?? null,
           booking_max_per_week: (page as any).booking_max_per_week ?? 3,
           booking_min_notice_days: (page as any).booking_min_notice_days ?? 0,
+          working_hours_start: (page as any).working_hours_start ?? '09:00',
+          working_hours_end: (page as any).working_hours_end ?? '17:00',
           google_tag_manager_id: (page as any).google_tag_manager_id ?? null,
         },
         sections: sectionsWithItems,
