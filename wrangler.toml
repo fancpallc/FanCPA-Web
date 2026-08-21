@@ -6,6 +6,7 @@ pages_build_output_dir = "dist"
 [vars]
 ENVIRONMENT = "local"
 SITE_URL = "http://localhost:8788"
+SLOT_DURATION_MINUTES = "60"
 
 # Local D1/R2 for `wrangler pages dev --local` (uses prod DB name/id after setup)
 [[d1_databases]]
@@ -22,6 +23,12 @@ bucket_name = "fancpa-images"
 [[env.preview.d1_databases]]
 binding = "DB"
 database_name = "fancpa-db-preview"
+
+[env.production.vars]
+ENVIRONMENT = "production"
+SITE_URL = "https://fancpa-web.pages.dev"
+TURNSTILE_SITE_KEY = "0x4AAAAAAEFtPVYesU8mlFUf"
+SLOT_DURATION_MINUTES = "60"
 database_id = "87488813-e045-4e50-8506-99fa4f25a625"
 
 [[env.preview.r2_buckets]]
@@ -33,6 +40,7 @@ ENVIRONMENT = "preview"
 # This URL is correct if 'alpha' is set as the custom preview branch
 SITE_URL = "https://alpha.fancpa-web.pages.dev"
 TURNSTILE_SITE_KEY = "0x4AAAAAAEFtPVYesU8mlFUf"
+SLOT_DURATION_MINUTES = "60"
 
 # Production env = main branch deployments
 [env.production]
@@ -49,3 +57,4 @@ bucket_name = "fancpa-images"
 ENVIRONMENT = "production"
 SITE_URL = "https://fancpa-web.pages.dev"
 TURNSTILE_SITE_KEY = "0x4AAAAAAEFtPVYesU8mlFUf"
+
