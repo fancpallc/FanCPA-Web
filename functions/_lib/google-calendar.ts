@@ -47,8 +47,8 @@ export function parseTime(timeStr: string | null | undefined): number {
 
 export function normalizeSlotMinutes(raw: any): number {
   // Configurable, always multiple of 15 per requirement
-  let mins = parseInt(String(raw ?? '30'), 10)
-  if (isNaN(mins) || mins < 15) mins = 30
+  let mins = parseInt(String(raw ?? '60'), 10)
+  if (isNaN(mins) || mins < 15) mins = 60
   if (mins > 120) mins = 120
   // Round down to nearest multiple of 15 (e.g. 20 → 15, 50 → 45)
   mins = Math.floor(mins / 15) * 15
@@ -233,7 +233,7 @@ export function getStubBusyBlocks(): BusyBlock[] {
 export function getStubSlots(weeks: number = 2, minNoticeDays: number = 1): CalendarSlot[] {
   const start = new Date()
   start.setUTCHours(0, 0, 0, 0)
-  const workingHours = { start: '09:00', end: '17:00', days: [1, 2, 3, 4, 5], slotMinutes: 30 }
+  const workingHours = { start: '09:00', end: '17:00', days: [1, 2, 3, 4, 5], slotMinutes: 60 }
   // No busy for stub → all available
   return computeSlots({ startDate: start, weeks, workingHours, busyBlocks: [], minNoticeDays })
 }
