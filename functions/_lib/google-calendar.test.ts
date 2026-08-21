@@ -121,9 +121,9 @@ describe('google-calendar lib — slot math', () => {
     // Non-multiple of 15 should round down to nearest multiple: 20 → 15, 50 → 45
     expect(normalizeSlotMinutes('20')).toBe(15)
     expect(normalizeSlotMinutes('50')).toBe(45)
-    // Invalid defaults to 30
-    expect(normalizeSlotMinutes('')).toBe(30)
-    expect(normalizeSlotMinutes(null as any)).toBe(30)
+    // Invalid defaults to 60
+    expect(normalizeSlotMinutes('')).toBe(60)
+    expect(normalizeSlotMinutes(null as any)).toBe(60)
   })
 
   it('should generate 14 days from today (not full month) for calendar display', () => {

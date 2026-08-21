@@ -69,7 +69,7 @@ export const onRequestGet: PagesFunction<Env> = async ({ request, env }) => {
       end: env?.WORKING_HOURS_END || '17:00',
       days: parseWorkingDays(env?.WORKING_DAYS),
       // Configurable, multiple of 15 per requirement
-      slotMinutes: normalizeSlotMinutes(env?.SLOT_DURATION_MINUTES || '30'),
+      slotMinutes: normalizeSlotMinutes(env?.SLOT_DURATION_MINUTES || '60'),
       minNoticeDays,
     }
     console.log(`!!! SLOTS_WORKING_HOURS start=${workingHours.start} end=${workingHours.end} days=${workingHours.days.join(',')} slotMinutes=${workingHours.slotMinutes} minNoticeDays=${minNoticeDays}`)
