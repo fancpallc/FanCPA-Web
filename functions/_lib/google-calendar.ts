@@ -1,9 +1,4 @@
-import { getBookingCalendarId, getPersonalCalendarId, getGcalServiceKey, hasOAuthConfig } from './env'
-import { createBookingEventViaOAuth } from './google-oauth'
-
-export interface WorkingHours {
-// ... existing code ...
-import { getBookingCalendarId, getPersonalCalendarId, getGcalServiceKey, hasOAuthConfig, getWorkingHoursStart, getWorkingHoursEnd } from './env'
+import { getBookingCalendarId, getPersonalCalendarId, getGcalServiceKey, hasOAuthConfig, getWorkingHoursStart, getWorkingHoursEnd, WorkingHours } from './env'
 import { createBookingEventViaOAuth } from './google-oauth'
 
 // ... existing code ...
