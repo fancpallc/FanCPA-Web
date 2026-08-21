@@ -46,14 +46,16 @@ export function parseTime(timeStr: string | null | undefined): number {
 }
 
 export function normalizeSlotMinutes(raw: any): number {
-  // Configurable, always multiple of 15 per requirement
-  let mins = parseInt(String(raw ?? '60'), 10)
-  if (isNaN(mins) || mins < 15) mins = 60
-  if (mins > 120) mins = 120
-  // Round down to nearest multiple of 15 (e.g. 20 → 15, 50 → 45)
-  mins = Math.floor(mins / 15) * 15
-  if (mins < 15) mins = 15
-  return mins
+
+
+
+
+
+
+
+
+  // Configurable, always 60 mins per requirement
+  return 60
 }
 
 export function filterWorkingDays(dates: Date[] | null | undefined, workingDays: number[] | null | undefined): Date[] {
