@@ -10,7 +10,7 @@ export interface Env {
 }
 
 /** Fields the owner may edit. `slug` and `id` are deliberately not among them. */
-const EDITABLE = ['site_name', 'footer_tagline', 'icon_url', 'title', 'meta_description', 'booking_max_per_week', 'booking_min_notice_days', 'google_tag_manager_id'] as const
+const EDITABLE = ['site_name', 'footer_tagline', 'icon_url', 'title', 'meta_description', 'booking_max_per_week', 'booking_min_notice_days', 'working_hours_start', 'working_hours_end', 'google_tag_manager_id'] as const
 
 /** Long enough for a name or a sentence; short enough that the header cannot be broken. */
 const MAX_LENGTH: Record<(typeof EDITABLE)[number], number> = {
@@ -21,6 +21,8 @@ const MAX_LENGTH: Record<(typeof EDITABLE)[number], number> = {
   meta_description: 200,
   booking_max_per_week: 10,
   booking_min_notice_days: 10,
+  working_hours_start: 5,
+  working_hours_end: 5,
   google_tag_manager_id: 50,
 }
 
@@ -69,7 +71,12 @@ export const onRequestPut: PagesFunction<Env> = async ({ request, env, params })
     if (field === 'booking_min_notice_days' && value !== null && (typeof value !== 'number' || value < 0)) {
       return new Response(JSON.stringify({ error: 'Minimum notice days must be a non-negative number' }), { status: 400, headers })
     }
-    if (field === 'booking_max_per_week' || field === 'booking_min_notice_days') {
+    if (field === 'working_hours_start' || field === 'working_hours_end') {
+      if (value !== null && typeof value === 'string' && !/^\d{1,2}:\d{2}$/.test(value)) {
+         return new Response(JSON.stringify({ error: 'Time must be in HH:MM format' }), { status: 400, headers })
+      }
+    }
+    if (field === 'booking_max_per_week' || field === 'booking_min_notice_days' || field === 'working_hours_start' || field === 'working_hours_end') {
       continue
     }
     if (field === 'google_tag_manager_id') {
@@ -101,6 +108,7 @@ export const onRequestPut: PagesFunction<Env> = async ({ request, env, params })
     const assignments = patch.map((f) => `${f} = ?`).join(', ')
     const values = patch.map((f) => {
         if (f === 'booking_max_per_week' || f === 'booking_min_notice_days') return typeof body[f] === 'string' ? parseInt(body[f]) : body[f]
+        if (f === 'working_hours_start' || f === 'working_hours_end') return body[f]
         return typeof body[f] === 'string' ? body[f].trim() : body[f]
     })
     await db.prepare(`UPDATE pages SET ${assignments}, updated_at = datetime('now') WHERE slug = ?`).bind(...values, slug).run()

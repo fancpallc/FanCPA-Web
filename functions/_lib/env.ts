@@ -28,6 +28,9 @@ const GCAL_KEY_ALIASES = [
   'GCAL_KEY',
 ]
 
+const WORKING_HOURS_START_ALIASES = ['WORKING_HOURS_START', 'START_TIME']
+const WORKING_HOURS_END_ALIASES = ['WORKING_HOURS_END', 'END_TIME']
+
 const RESEND_KEY_ALIASES = [
   'RESEND_API_KEY',
   'RESEND_KEY',
@@ -94,6 +97,14 @@ export function getPersonalCalendarId(env: any): string | undefined {
 
 export function getGcalServiceKey(env: any): string | undefined {
   return resolveEnvVar(env, GCAL_KEY_ALIASES)
+}
+
+export function getWorkingHoursStart(env: any): string {
+  return resolveEnvVar(env, WORKING_HOURS_START_ALIASES) || '09:00'
+}
+
+export function getWorkingHoursEnd(env: any): string {
+  return resolveEnvVar(env, WORKING_HOURS_END_ALIASES) || '17:00'
 }
 
 export function getResendApiKey(env: any): string | undefined {
@@ -201,3 +212,4 @@ export function getAdminAllowlistFromEnv(env: any): string[] {
     .map((s) => s.trim().toLowerCase())
     .filter((s) => s.length > 0)
 }
+

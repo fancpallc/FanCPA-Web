@@ -41,6 +41,8 @@ export interface AdminPage {
   icon_url?: string | null
   booking_max_per_week?: number | null
   booking_min_notice_days?: number | null
+  working_hours_start?: string | null
+  working_hours_end?: string | null
   google_tag_manager_id?: string | null
 }
 

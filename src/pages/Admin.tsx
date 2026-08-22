@@ -377,6 +377,32 @@ export function Admin() {
                 </div>
               </div>
               <div>
+                <div className="editor-chrome text-[11px] text-gray-500 mb-1">Working hours start (e.g. 09:00)</div>
+                <div className="text-sm">
+                  <EditableText
+                    value={content.page?.working_hours_start || '09:00'}
+                    onSave={async (v) => { try { await content.updatePage({ working_hours_start: v }) } catch (e: any) { setGlobalError(e?.message); throw e } }}
+                    placeholder="09:00"
+                    required
+                    ariaLabel="Working hours start"
+                    displayClassName="text-sm"
+                  />
+                </div>
+              </div>
+              <div>
+                <div className="editor-chrome text-[11px] text-gray-500 mb-1">Working hours end (e.g. 17:00)</div>
+                <div className="text-sm">
+                  <EditableText
+                    value={content.page?.working_hours_end || '17:00'}
+                    onSave={async (v) => { try { await content.updatePage({ working_hours_end: v }) } catch (e: any) { setGlobalError(e?.message); throw e } }}
+                    placeholder="17:00"
+                    required
+                    ariaLabel="Working hours end"
+                    displayClassName="text-sm"
+                  />
+                </div>
+              </div>
+              <div>
                 <div className="editor-chrome text-[11px] text-gray-500 mb-1">Search description — the grey text under your Google result</div>
                 <div className="text-sm text-gray-600">
                   <EditableText
