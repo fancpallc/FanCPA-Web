@@ -1,0 +1,115 @@
+import React, { useState, useEffect } from 'react';
+import { useAdminAuth } from '../hooks/useAdminAuth';
+import { searchAdminClients, updateAdminDriveFolder, sendAdminClientEmail, AdminClientRow } from '../lib/api';
+import { toast } from 'react-hot-toast';
+import { Link } from 'react-router-dom';
+
+export default function AdminClients() {
+  const { isAuthed, loading: authLoading } = useAdminAuth();
+  const [q, setQ] = useState('');
+  const [startDate, setStartDate] = useState('');
+  const [endDate, setEndDate] = useState('');
+  const [results, setResults] = useState<AdminClientRow[]>([]);
+  const [loading, setLoading] = useState(false);
+  const [editing, setEditing] = useState<Record<string, string>>({});
+
+  const handleSearch = async (e?: React.FormEvent) => {
+    e?.preventDefault();
+    setLoading(true);
+    try {
+      const data = await searchAdminClients(q, { startDate, endDate });
+      setResults(data);
+    } catch (err: any) {
+      toast.error('Search failed: ' + err.message);
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const handleSave = async (contact_id: string, currentYear: number) => {
+    const url = editing[contact_id];
+    if (!url) return;
+    try {
+      await updateAdminDriveFolder(contact_id, currentYear.toString(), url);
+      toast.success('Drive link updated');
+      handleSearch();
+    } catch (err: any) {
+      toast.error('Failed to save: ' + err.message);
+    }
+  };
+
+  const handleSend = async (contact_id: string) => {
+    try {
+      await sendAdminClientEmail(contact_id);
+      toast.success('Email sent');
+    } catch (err: any) {
+      toast.error('Failed to send: ' + err.message);
+    }
+  };
+
+  if (authLoading) return <div>Loading...</div>;
+  if (!isAuthed) return <div>Unauthorized</div>;
+
+  return (
+    <div className="p-4">
+      <div className="sticky top-0 bg-white p-4 border-b flex justify-between items-center z-10">
+        <h1 className="text-xl font-bold">Admin Client Portal</h1>
+        <div className="flex gap-2">
+          <button onClick={() => window.location.href = '/admin'} className="text-blue-600">Back to Admin</button>
+          <a href="/" className="text-blue-600">View site</a>
+        </div>
+      </div>
+
+      <form onSubmit={handleSearch} className="my-4 p-4 border rounded flex gap-2 items-end">
+        <div>
+          <label htmlFor="q" className="block text-sm">Search</label>
+          <input id="q" value={q} onChange={e => setQ(e.target.value)} placeholder="Email, first or last name" className="border p-1" />
+        </div>
+        <div>
+          <label htmlFor="startDate" className="block text-sm">From</label>
+          <input id="startDate" type="date" value={startDate} onChange={e => setStartDate(e.target.value)} className="border p-1" />
+        </div>
+        <div>
+          <label htmlFor="endDate" className="block text-sm">To</label>
+          <input id="endDate" type="date" value={endDate} onChange={e => setEndDate(e.target.value)} className="border p-1" />
+        </div>
+        <button type="submit" disabled={loading} className="bg-blue-600 text-white px-4 py-1 rounded">Search</button>
+      </form>
+
+      <div className="text-sm mb-4">Effective Drive Root: {import.meta.env.VITE_GOOGLE_DRIVE_ROOT_FOLDER_ID || 'Not Configured'}</div>
+
+      <table className="w-full text-sm">
+        <thead>
+          <tr className="border-b">
+            <th className="p-2">Name</th>
+            <th className="p-2">Email</th>
+            <th className="p-2">Meeting Time</th>
+            <th className="p-2">Meeting URL</th>
+            <th className="p-2">GDrive Link</th>
+            <th className="p-2">Actions</th>
+          </tr>
+        </thead>
+        <tbody>
+          {results.map(r => (
+            <tr key={r.contact_id} className="border-b">
+              <td className="p-2">{r.first_name} {r.last_name}</td>
+              <td className="p-2">{r.email}</td>
+              <td className="p-2">{r.slot_start ? new Date(r.slot_start).toLocaleString() : '-'}</td>
+              <td className="p-2 text-xs truncate max-w-[100px]">{r.meet_link}</td>
+              <td className="p-2">
+                <input 
+                  defaultValue={r.year_folder_url || ''} 
+                  onChange={e => setEditing({...editing, [r.contact_id]: e.target.value})}
+                  className="border p-1 w-full"
+                />
+                <button onClick={() => handleSave(r.contact_id, new Date().getFullYear())} className="text-blue-600 ml-1">Save</button>
+              </td>
+              <td className="p-2"><button onClick={() => handleSend(r.contact_id)} className="bg-green-600 text-white px-2 py-1 rounded">Send</button></td>
+            </tr>
+          ))}
+        </tbody>
+      </table>
+    </div>
+  );
+}
+
