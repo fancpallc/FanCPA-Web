@@ -69,11 +69,31 @@ export function Nav({ title = 'FAN CPA LLC' }: NavProps) {
             phone they collapse behind a Menu button instead of disappearing entirely. */}
         <div className="flex items-center gap-4 sm:gap-6 text-sm font-semibold justify-end">
           {sectionLinks.map((item) => (
-            <a key={item.href} href={item.href} className={`${collapseOnMobile ? 'hidden sm:inline-flex' : 'inline-flex'} hover:underline focus:outline-none focus:underline items-center min-h-11 px-1`}>
-              {item.label}
+            <a
+                      key={item.href}
+                      href={item.href}
+              className={`${collapseOnMobile ? 'hidden sm:inline-flex' : 'inline-flex'} hover:underline focus:outline-none focus:underline items-center min-h-11 px-1`}
+              onClick={item.href.startsWith('/') ? undefined : (e) => {
+                if (item.href.startsWith('#')) {
+                  e.preventDefault()
+                  const el = document.querySelector(item.href)
+                  el?.scrollIntoView({ behavior: 'smooth' })
+                  window.history.pushState(null, '', item.href)
+                }
+              }}
+            >
+                      {item.label}
                     </a>
                   ))}
-          <a href="#calendar" className="inline-flex items-center min-h-11 px-4 rounded-full bg-slate-900 text-white whitespace-nowrap">
+          <a
+            href="#calendar"
+            className="inline-flex items-center min-h-11 px-4 rounded-full bg-slate-900 text-white whitespace-nowrap"
+            onClick={(e) => {
+              e.preventDefault()
+              document.querySelector('#calendar')?.scrollIntoView({ behavior: 'smooth' })
+              window.history.pushState(null, '', '#calendar')
+            }}
+          >
             Book a free call
           </a>
           {collapseOnMobile && (
@@ -93,7 +113,15 @@ export function Nav({ title = 'FAN CPA LLC' }: NavProps) {
                     <a
                       key={item.href}
                       href={item.href}
-                      onClick={() => setMenuOpen(false)}
+                      onClick={(e) => {
+                        setMenuOpen(false)
+                        if (item.href.startsWith('#')) {
+                          e.preventDefault()
+                          const el = document.querySelector(item.href)
+                          el?.scrollIntoView({ behavior: 'smooth' })
+                          window.history.pushState(null, '', item.href)
+}
+                      }}
                       className="inline-flex items-center min-h-11 px-3 rounded-lg hover:bg-slate-50"
                     >
                       {item.label}
