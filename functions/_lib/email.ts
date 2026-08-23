@@ -75,7 +75,63 @@ export function buildPendingConfirmEmail(params: {
       <div style="margin: 24px 0;">
         <a href="${confirmUrl}" style="display:inline-block; padding:12px 24px; background:#0f172a; color:white; border-radius:999px; text-decoration:none; font-weight:600; font-size:14px;">Confirm meeting →</a>
       </div>
-      <p style="font-size:12px; color:#64748b;">This link expires in 30 minutes and is one-time use. If you didn't request this, ignore this email.</p>
+// ... existing code ...
+export interface SendEmailParams {
+  to: string
+  firstName: string
+  lastName: string
+  meetLink?: string
+  cancelUrl?: string
+  dateTime: string
+  purpose?: string
+  driveFolderUrl?: string
+  env: EmailEnv
+}
+
+export interface SendEmailResult {
+// ... existing code ...
+export function buildConfirmationEmail(params: {
+  firstName: string
+  lastName: string
+  email: string
+  meetLink?: string
+  cancelUrl?: string
+  dateTime: string
+  purpose?: string
+  driveFolderUrl?: string
+  env?: any
+}): string {
+  const { firstName, lastName, email, meetLink, cancelUrl, dateTime, purpose, driveFolderUrl } = params
+
+  // No calendar IDs leaked — only email/purpose/meetLink/cancelUrl/dateTime per requirement
+  return `
+    <div style="font-family: sans-serif; max-width: 600px; margin: 0 auto;">
+      <h2>Meeting Confirmed — ${dateTime}</h2>
+      <p>Hi ${firstName} ${lastName || ''},</p>
+      <p>Your meeting is confirmed for <strong>${dateTime}</strong>.</p>
+      ${purpose ? `<p><strong>Purpose:</strong> ${purpose}</p>` : ''}
+      <p><strong>Email:</strong> ${email}</p>
+      ${meetLink ? `<p>Meet link: <a href="${meetLink}">${meetLink}</a></p>` : ''}
+      ${driveFolderUrl ? `<p>Drive folder: <a href="${driveFolderUrl}">${driveFolderUrl}</a></p>` : ''}
+      ${cancelUrl ? `<p>Cancel link: <a href="${cancelUrl}">${cancelUrl}</a></p>` : ''}
+      <p>Google Calendar invite also sent with Meet join button + description containing Meet link. Purpose included in invite.</p>
+      <p>Thanks!</p>
+    </div>
+  `.trim()
+}
+// ... existing code ...
+export async function sendConfirmationEmail(params: SendEmailParams): Promise<SendEmailResult> {
+  const { to, firstName, lastName, meetLink, cancelUrl, dateTime, purpose, driveFolderUrl, env } = params
+
+  const from = env?.EMAIL_FROM || env?.FROM || 'onboarding@resend.dev'
+// ... existing code ...
+  try {
+    const subject = getSubject(env, dateTime)
+    const html = buildConfirmationEmail({ firstName, lastName, email: to, meetLink, cancelUrl, dateTime, purpose, driveFolderUrl, env })
+    console.log(`!!! EMAIL_BUILD_SUBJECT subject=${subject} from=${from}`)
+
+    const res = await fetch('https://api.resend.com/emails', {
+// ... existing code ...
       <p style="font-size:12px; color:#94a3b8;">Purpose will be included in calendar invite: ${purpose || 'Intro call'}</p>
     </div>
   `.trim()

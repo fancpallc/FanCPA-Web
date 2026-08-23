@@ -71,6 +71,8 @@ const BOOKING_LIMIT_ENABLED_ALIASES = [
   'MAX_BOOKINGS_ENABLED',
 ]
 
+const DRIVE_FOLDER_ID_ALIASES = ['DRIVE_FOLDER_ID', 'CLIENT_DRIVE_FOLDER_ID', 'DRIVE_ROOT_FOLDER_ID']
+
 const ADMIN_BYPASS_ALIASES = ['ADMIN_BYPASS', 'ADMIN_BYPASS_ENABLED', 'BYPASS_ADMIN', 'ADMIN_BYPASS_FLAG']
 const ADMIN_EMAILS_ALIASES = ['ADMIN_EMAILS', 'ADMIN_EMAIL', 'ALLOWED_EMAILS', 'ADMIN_ALLOWLIST', 'ADMIN_ALLOWED_EMAILS']
 
@@ -145,10 +147,14 @@ export function isBookingLimitEnabled(env: any): boolean {
   return true // default enabled when flag present but unparsable
 }
 
+export function getDriveFolderId(env: any): string | undefined {
+  return resolveEnvVar(env, DRIVE_FOLDER_ID_ALIASES)
+}
+
 export function getEnvironment(env?: EnvVars | null): EnvironmentName {
   if (!env || !env.ENVIRONMENT) {
-    return 'production'
-  }
+  return 'production'
+}
   const raw = String(env.ENVIRONMENT).toLowerCase() as EnvironmentName
   const allowed: EnvironmentName[] = ['production', 'preview', 'alpha', 'local', 'test']
   if (allowed.includes(raw)) {
@@ -201,3 +207,4 @@ export function getAdminAllowlistFromEnv(env: any): string[] {
     .map((s) => s.trim().toLowerCase())
     .filter((s) => s.length > 0)
 }
+
