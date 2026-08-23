@@ -1,4 +1,4 @@
-import { hasOAuthConfig } from './env'
+import { hasOAuthConfig, getDriveRootFolderId } from './env'
 import { getOAuthAccessToken } from './google-oauth'
 
 export interface DriveFolderResult {
@@ -14,7 +14,13 @@ async function getDriveAccessToken(env: any): Promise<{ token: string; source: '
     const { accessToken } = await getOAuthAccessToken(env)
     return { token: accessToken, source: 'live' }
   }
-  // Fallback SA JWT logic or stub if not available
+  // Try Service Account fallback if configured
+  const saKey = env.GOOGLE_DRIVE_SERVICE_ACCOUNT_KEY || env.DRIVE_SERVICE_ACCOUNT_KEY || env.GCAL_SERVICE_ACCOUNT_KEY
+  if (saKey) {
+    // In a real implementation, you'd exchange this for a token.
+    // For now, return stub.
+  return { token: '', source: 'stub' }
+}
   return { token: '', source: 'stub' }
 }
 
@@ -23,9 +29,10 @@ export function extractFolderId(url: string): string | null {
 }
 
 export async function searchFolder(name: string, parentId: string, token: string): Promise<any | null> {
-  const q = `mimeType='application/vnd.google-apps.folder' and name='${encodeURIComponent(name)}' and '${parentId}' in parents and trashed=false`
+  const escaped = name.replace(/'/g, "\\'")
+  const q = `mimeType='application/vnd.google-apps.folder' and name='${escaped}' and '${parentId}' in parents and trashed=false`
   try {
-  const response = await fetch(`https://www.googleapis.com/drive/v3/files?q=${q}`, {
+    const response = await fetch(`https://www.googleapis.com/drive/v3/files?q=${encodeURIComponent(q)}&fields=files(id,name)`, {
     headers: { Authorization: `Bearer ${token}` }
   })
     if (!response.ok) return null
@@ -108,22 +115,31 @@ export async function ensureClientDriveFolder(
   }
 
   // Live implementation
-  const { token } = await getDriveAccessToken(env)
+  const { token, source } = await getDriveAccessToken(env)
+  if (source === 'stub') {
+  return {
+      emailFolderId: 'stub-folder',
+      emailFolderUrl: '#',
+      yearFolderId: 'stub-folder',
+      yearFolderUrl: '#',
+      source: 'stub'
+  }
+}
 
-  // Note: getEffectiveDriveRootFolderId would typically come from db.ts,
-  // currently we use the env var as the primary source as requested.
-  const rootId = env?.GOOGLE_DRIVE_ROOT_FOLDER_ID || 'root'
+  const rootId = getDriveRootFolderId(env) || 'root'
 
   let emailFolder = await searchFolder(email, rootId, token)
   if (!emailFolder) {
     emailFolder = await createFolder(email, rootId, token)
   }
+  if (!emailFolder || !emailFolder.id) throw new Error('Failed to ensure email folder')
   await ensurePermission(emailFolder.id, email, token)
 
   let yearFolder = await searchFolder(String(year), emailFolder.id, token)
   if (!yearFolder) {
     yearFolder = await createFolder(String(year), emailFolder.id, token)
   }
+  if (!yearFolder || !yearFolder.id) throw new Error('Failed to ensure year folder')
   await ensurePermission(yearFolder.id, email, token)
   return {
     emailFolderId: emailFolder.id,
