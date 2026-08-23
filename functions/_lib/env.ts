@@ -73,6 +73,10 @@ const BOOKING_LIMIT_ENABLED_ALIASES = [
 
 const DRIVE_FOLDER_ID_ALIASES = ['DRIVE_FOLDER_ID', 'CLIENT_DRIVE_FOLDER_ID', 'DRIVE_ROOT_FOLDER_ID']
 
+const DRIVE_ROOT_ALIASES = ['GOOGLE_DRIVE_ROOT_FOLDER_ID','DRIVE_ROOT_FOLDER_ID','GDRIVE_ROOT_FOLDER_ID']
+const DRIVE_KEY_ALIASES = ['GOOGLE_DRIVE_SERVICE_ACCOUNT_KEY','DRIVE_SERVICE_ACCOUNT_KEY','GCAL_SERVICE_ACCOUNT_KEY']
+const DRIVE_OWNER_ALIASES = ['GOOGLE_DRIVE_OWNER_EMAIL']
+
 const ADMIN_BYPASS_ALIASES = ['ADMIN_BYPASS', 'ADMIN_BYPASS_ENABLED', 'BYPASS_ADMIN', 'ADMIN_BYPASS_FLAG']
 const ADMIN_EMAILS_ALIASES = ['ADMIN_EMAILS', 'ADMIN_EMAIL', 'ALLOWED_EMAILS', 'ADMIN_ALLOWLIST', 'ADMIN_ALLOWED_EMAILS']
 
@@ -149,6 +153,18 @@ export function isBookingLimitEnabled(env: any): boolean {
 
 export function getDriveFolderId(env: any): string | undefined {
   return resolveEnvVar(env, DRIVE_FOLDER_ID_ALIASES)
+}
+
+export function getDriveRootFolderId(env: any) { return resolveEnvVar(env, DRIVE_ROOT_ALIASES) }
+export function getDriveServiceKey(env: any) { return resolveEnvVar(env, DRIVE_KEY_ALIASES) }
+export function getDriveOwnerEmail(env: any) { return resolveEnvVar(env, DRIVE_OWNER_ALIASES) }
+export async function getEffectiveDriveRootFolderId(env: any, db: any) {
+  // try admin_settings if exists else env else undefined
+  try {
+    const setting = await db.prepare('SELECT value FROM settings WHERE key = "drive_root_folder_id"').first() as any
+    if (setting?.value) return setting.value
+  } catch {}
+  return getDriveRootFolderId(env)
 }
 
 export function getEnvironment(env?: EnvVars | null): EnvironmentName {

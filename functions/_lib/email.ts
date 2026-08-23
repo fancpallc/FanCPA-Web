@@ -12,10 +12,12 @@ export interface SendEmailParams {
   to: string
   firstName: string
   lastName: string
-  meetLink: string
-  cancelUrl: string
+  meetLink?: string
+  cancelUrl?: string
   dateTime: string
   purpose?: string
+  driveFolderUrl?: string
+  driveYear?: number
   env: EmailEnv
 }
 
@@ -25,18 +27,19 @@ export interface SendEmailResult {
   source: 'live' | 'stub'
   error?: string
 }
-
 export function buildConfirmationEmail(params: {
   firstName: string
   lastName: string
   email: string
-  meetLink: string
-  cancelUrl: string
+  meetLink?: string
+  cancelUrl?: string
   dateTime: string
   purpose?: string
+  driveFolderUrl?: string
+  driveYear?: number
   env?: any
 }): string {
-  const { firstName, lastName, email, meetLink, cancelUrl, dateTime, purpose } = params
+  const { firstName, lastName, email, meetLink, cancelUrl, dateTime, purpose, driveFolderUrl, driveYear } = params
 
   // No calendar IDs leaked — only email/purpose/meetLink/cancelUrl/dateTime per requirement
   return `
@@ -46,8 +49,9 @@ export function buildConfirmationEmail(params: {
       <p>Your meeting is confirmed for <strong>${dateTime}</strong>.</p>
       ${purpose ? `<p><strong>Purpose:</strong> ${purpose}</p>` : ''}
       <p><strong>Email:</strong> ${email}</p>
-      <p>Meet link: <a href="${meetLink}">${meetLink}</a></p>
-      <p>Cancel link: <a href="${cancelUrl}">${cancelUrl}</a></p>
+      ${meetLink ? `<p>Meet link: <a href="${meetLink}">${meetLink}</a></p>` : ''}
+      ${driveFolderUrl ? `<p>Drive folder${driveYear ? ` (${driveYear})` : ''}: <a href="${driveFolderUrl}">${driveFolderUrl}</a></p>` : ''}
+      ${cancelUrl ? `<p>Cancel link: <a href="${cancelUrl}">${cancelUrl}</a></p>` : ''}
       <p>Google Calendar invite also sent with Meet join button + description containing Meet link. Purpose included in invite.</p>
       <p>Thanks!</p>
     </div>
@@ -75,63 +79,6 @@ export function buildPendingConfirmEmail(params: {
       <div style="margin: 24px 0;">
         <a href="${confirmUrl}" style="display:inline-block; padding:12px 24px; background:#0f172a; color:white; border-radius:999px; text-decoration:none; font-weight:600; font-size:14px;">Confirm meeting →</a>
       </div>
-// ... existing code ...
-export interface SendEmailParams {
-  to: string
-  firstName: string
-  lastName: string
-  meetLink?: string
-  cancelUrl?: string
-  dateTime: string
-  purpose?: string
-  driveFolderUrl?: string
-  env: EmailEnv
-}
-
-export interface SendEmailResult {
-// ... existing code ...
-export function buildConfirmationEmail(params: {
-  firstName: string
-  lastName: string
-  email: string
-  meetLink?: string
-  cancelUrl?: string
-  dateTime: string
-  purpose?: string
-  driveFolderUrl?: string
-  env?: any
-}): string {
-  const { firstName, lastName, email, meetLink, cancelUrl, dateTime, purpose, driveFolderUrl } = params
-
-  // No calendar IDs leaked — only email/purpose/meetLink/cancelUrl/dateTime per requirement
-  return `
-    <div style="font-family: sans-serif; max-width: 600px; margin: 0 auto;">
-      <h2>Meeting Confirmed — ${dateTime}</h2>
-      <p>Hi ${firstName} ${lastName || ''},</p>
-      <p>Your meeting is confirmed for <strong>${dateTime}</strong>.</p>
-      ${purpose ? `<p><strong>Purpose:</strong> ${purpose}</p>` : ''}
-      <p><strong>Email:</strong> ${email}</p>
-      ${meetLink ? `<p>Meet link: <a href="${meetLink}">${meetLink}</a></p>` : ''}
-      ${driveFolderUrl ? `<p>Drive folder: <a href="${driveFolderUrl}">${driveFolderUrl}</a></p>` : ''}
-      ${cancelUrl ? `<p>Cancel link: <a href="${cancelUrl}">${cancelUrl}</a></p>` : ''}
-      <p>Google Calendar invite also sent with Meet join button + description containing Meet link. Purpose included in invite.</p>
-      <p>Thanks!</p>
-    </div>
-  `.trim()
-}
-// ... existing code ...
-export async function sendConfirmationEmail(params: SendEmailParams): Promise<SendEmailResult> {
-  const { to, firstName, lastName, meetLink, cancelUrl, dateTime, purpose, driveFolderUrl, env } = params
-
-  const from = env?.EMAIL_FROM || env?.FROM || 'onboarding@resend.dev'
-// ... existing code ...
-  try {
-    const subject = getSubject(env, dateTime)
-    const html = buildConfirmationEmail({ firstName, lastName, email: to, meetLink, cancelUrl, dateTime, purpose, driveFolderUrl, env })
-    console.log(`!!! EMAIL_BUILD_SUBJECT subject=${subject} from=${from}`)
-
-    const res = await fetch('https://api.resend.com/emails', {
-// ... existing code ...
       <p style="font-size:12px; color:#94a3b8;">Purpose will be included in calendar invite: ${purpose || 'Intro call'}</p>
     </div>
   `.trim()
@@ -197,7 +144,7 @@ export async function sendPendingConfirmEmail(params: PendingEmailParams): Promi
 }
 
 export async function sendConfirmationEmail(params: SendEmailParams): Promise<SendEmailResult> {
-  const { to, firstName, lastName, meetLink, cancelUrl, dateTime, purpose, env } = params
+  const { to, firstName, lastName, meetLink, cancelUrl, dateTime, purpose, driveFolderUrl, driveYear, env } = params
 
   const from = env?.EMAIL_FROM || env?.FROM || 'onboarding@resend.dev'
   const apiKey = getResendApiKey(env) || env?.RESEND_API_KEY
@@ -212,7 +159,7 @@ export async function sendConfirmationEmail(params: SendEmailParams): Promise<Se
 
   try {
     const subject = getSubject(env, dateTime)
-    const html = buildConfirmationEmail({ firstName, lastName, email: to, meetLink, cancelUrl, dateTime, purpose, env })
+    const html = buildConfirmationEmail({ firstName, lastName, email: to, meetLink, cancelUrl, dateTime, purpose, driveFolderUrl, driveYear, env })
     console.log(`!!! EMAIL_BUILD_SUBJECT subject=${subject} from=${from}`)
 
     const res = await fetch('https://api.resend.com/emails', {
@@ -253,5 +200,94 @@ export async function sendConfirmationEmail(params: SendEmailParams): Promise<Se
       return { success: true, id: 'mock-id-fallback', source: 'stub', error: errMsg }
     }
     return { success: false, source: 'live', error: errMsg }
+  }
+}
+
+
+export function buildClientPortalDriveEmail(params: {
+  firstName: string
+  driveLinks: { year: number; url: string }[]
+}): string {
+  const { firstName, driveLinks } = params
+  return `
+    <div style="font-family: sans-serif; max-width: 600px; margin: 0 auto;">
+      <h2>Your Client Portal Folders</h2>
+      <p>Hi ${firstName},</p>
+      <p>Here are your shared Drive folders:</p>
+      <ul>
+        ${driveLinks.map(link => `<li><strong>${link.year}:</strong> <a href="${link.url}">${link.url}</a></li>`).join('')}
+      </ul>
+    </div>
+  `.trim()
+}
+
+export function buildAdminDriveEmail(params: {
+  firstName: string
+  driveLink: string
+  meetings: string[]
+}): string {
+  const { firstName, driveLink, meetings } = params
+  return `
+    <div style="font-family: sans-serif; max-width: 600px; margin: 0 auto;">
+      <h2>Admin Drive Update</h2>
+      <p>Client: ${firstName}</p>
+      <p>Folder: <a href="${driveLink}">${driveLink}</a></p>
+      <p>Meetings: ${meetings.join(', ')}</p>
+    </div>
+  `.trim()
+}
+
+export async function sendClientPortalDriveEmail(params: {
+  to: string
+  firstName: string
+  driveLinks: { year: number; url: string }[]
+  env: EmailEnv
+}): Promise<SendEmailResult> {
+  const { to, firstName, driveLinks, env } = params
+  const from = env?.EMAIL_FROM || env?.FROM || 'onboarding@resend.dev'
+  const apiKey = getResendApiKey(env) || env?.RESEND_API_KEY
+  
+  if (!apiKey) return { success: true, source: 'stub' }
+
+  try {
+    const subject = 'Your Client Portal Folders'
+    const html = buildClientPortalDriveEmail({ firstName, driveLinks })
+    const res = await fetch('https://api.resend.com/emails', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${apiKey}` },
+      body: JSON.stringify({ from, to, subject, html }),
+    })
+    const json = (await res.json()) as any
+    return { success: true, id: json.id, source: 'live' }
+  } catch (e: any) {
+    return { success: false, source: 'live', error: e?.message }
+  }
+}
+
+export async function sendAdminDriveEmail(params: {
+  to: string
+  firstName: string
+  driveLink: string
+  meetings: string[]
+  env: EmailEnv
+}): Promise<SendEmailResult> {
+  const { to, firstName, driveLink, meetings, env } = params
+  const from = env?.EMAIL_FROM || env?.FROM || 'onboarding@resend.dev'
+  const apiKey = getResendApiKey(env) || env?.RESEND_API_KEY
+  
+  if (!apiKey) return { success: true, source: 'stub' }
+
+  try {
+    const subject = `Admin Drive Update: ${firstName}`
+    const html = buildAdminDriveEmail({ firstName, driveLink, meetings })
+    const res = await fetch('https://api.resend.com/emails', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${apiKey}` },
+      body: JSON.stringify({ from, to, subject, html }),
+    })
+    const json = (await res.json()) as any
+    return { success: true, id: json.id, source: 'live' }
+  } catch (e: any) {
+    return { success: false, source: 'live', error: e?.message }
   }
 }
