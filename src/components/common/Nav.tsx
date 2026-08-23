@@ -21,6 +21,7 @@ export function Nav({ title = 'FAN CPA LLC' }: NavProps) {
     { label: 'Testimonials', href: '#testimonials', show: visibleTypes.has('testimonials') },
     // The gallery is often the largest section on the page and nothing used to link to it.
     { label: 'Work', href: '#work', show: visibleTypes.has('image-gallery') },
+    { label: 'Client Portal', href: '/client-portal', show: true },
   ]
 
   const sectionLinks = navItems.filter((it) => it.show)
