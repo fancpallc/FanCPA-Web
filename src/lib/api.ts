@@ -200,9 +200,44 @@ export interface AdminAuthResponse {
   diagnostics?: any
 }
 
+export interface AdminClientRow {
+  contact_id: string
+  first_name: string
+  last_name: string
+  email: string
+  booking_id?: string
+  meet_link?: string
+  purpose?: string
+  slot_start?: string
+  time_zone?: string
+  year?: number
+  year_folder_url?: string
+}
+
 export async function fetchAdminAuth(options: FetchOptions = {}): Promise<AdminAuthResponse> {
   const { json } = await fetchJson('/api/admin/auth', { ...options, cache: 'no-store' } as any)
   return json as AdminAuthResponse
+}
+
+export async function searchAdminClients(q: string, options: FetchOptions = {}): Promise<AdminClientRow[]> {
+  const { json } = await fetchJson(`/api/admin/clients/search?q=${encodeURIComponent(q)}`, { ...options })
+  return (json as any).results
+}
+
+export async function updateAdminDriveFolder(contact_id: string, year: string, folder_url: string, options: FetchOptions = {}): Promise<void> {
+  await fetchJson('/api/admin/clients/drive-folder', {
+    ...options,
+    method: 'PATCH',
+    body: JSON.stringify({ contact_id, year, folder_url })
+  })
+}
+
+export async function sendAdminClientEmail(contact_id: string, options: FetchOptions = {}): Promise<void> {
+  await fetchJson('/api/admin/clients/send-email', {
+    ...options,
+    method: 'POST',
+    body: JSON.stringify({ contact_id })
+  })
 }
 
 export interface R2UsageResponse {
