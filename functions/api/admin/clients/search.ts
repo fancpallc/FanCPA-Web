@@ -7,6 +7,8 @@ export const onRequestGet: PagesFunction<Env> = async ({ request, env }) => {
 
   const url = new URL(request.url)
   const q = url.searchParams.get('q')
+  const startDate = url.searchParams.get('start_date')
+  const endDate = url.searchParams.get('end_date')
 
   if (!q) {
     return new Response(JSON.stringify({ results: [] }), {
@@ -17,7 +19,7 @@ export const onRequestGet: PagesFunction<Env> = async ({ request, env }) => {
   const db = env.DB as any
   const searchQuery = `%${q.toLowerCase()}%`
 
-  const sql = `
+  let query = `
     SELECT 
         c.id as contact_id, 
         c.first_name, 
@@ -33,15 +35,27 @@ export const onRequestGet: PagesFunction<Env> = async ({ request, env }) => {
     FROM contacts c 
     LEFT JOIN bookings b ON b.contact_id = c.id AND b.status = 'confirmed'
     LEFT JOIN client_drive_folders cdf ON cdf.contact_id = c.id
-    WHERE lower(c.email) LIKE ?1 
+    WHERE (lower(c.email) LIKE ?1
        OR lower(c.first_name) LIKE ?1 
-       OR lower(c.last_name) LIKE ?1 
-    ORDER BY b.slot_start DESC 
-    LIMIT 100
+       OR lower(c.last_name) LIKE ?1)
   `
 
+  const binds: any[] = [searchQuery]
+  let idx = 2
+  if (startDate) {
+    query += ` AND datetime(b.slot_start) >= datetime(?${idx}) `
+    binds.push(startDate)
+    idx++
+  }
+  if (endDate) {
+    query += ` AND datetime(b.slot_start) <= datetime(?${idx}) `
+    binds.push(endDate)
+    idx++
+  }
+  query += ` ORDER BY b.slot_start DESC LIMIT 100`
+
   try {
-    const { results } = await db.prepare(sql).bind(searchQuery).all()
+    const { results } = await db.prepare(query).bind(...binds).all()
     return new Response(JSON.stringify({ results }), {
       headers: { 'Content-Type': 'application/json' },
     })
