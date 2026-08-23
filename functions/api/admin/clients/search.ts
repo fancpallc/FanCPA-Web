@@ -15,10 +15,13 @@ export const onRequestGet: PagesFunction<Env> = async ({ request, env }) => {
   }
 
   const db = env.DB as any
-  const searchQuery = `%${q.toLowerCase()}%`
+  const sanitizedQ = q.trim().replace(/[%_]/g, '\\$&')
+  const searchQuery = `%${sanitizedQ.toLowerCase()}%`
+
+  console.log(`!!! ADMIN_SEARCH_START q=${q}`)
 
   const sql = `
-    SELECT 
+    SELECT DISTINCT
         c.id as contact_id, 
         c.first_name, 
         c.last_name, 
@@ -33,9 +36,10 @@ export const onRequestGet: PagesFunction<Env> = async ({ request, env }) => {
     FROM contacts c 
     LEFT JOIN bookings b ON b.contact_id = c.id AND b.status = 'confirmed'
     LEFT JOIN client_drive_folders cdf ON cdf.contact_id = c.id
-    WHERE lower(c.email) LIKE ?1 
-       OR lower(c.first_name) LIKE ?1 
-       OR lower(c.last_name) LIKE ?1 
+      AND (b.slot_start IS NULL OR cdf.year = CAST(strftime('%Y', b.slot_start) AS INTEGER))
+    WHERE lower(c.email) LIKE ?1 ESCAPE '\\'
+       OR lower(c.first_name) LIKE ?1 ESCAPE '\\'
+       OR lower(c.last_name) LIKE ?1 ESCAPE '\\'
     ORDER BY b.slot_start DESC 
     LIMIT 100
   `
