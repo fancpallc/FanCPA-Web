@@ -247,7 +247,12 @@ export async function sendClientPortalDriveEmail(params: {
   const from = env?.EMAIL_FROM || env?.FROM || 'onboarding@resend.dev'
   const apiKey = getResendApiKey(env) || env?.RESEND_API_KEY
   
-  if (!apiKey) return { success: true, source: 'stub' }
+
+  console.log(`!!! CLIENT_PORTAL_DRIVE_EMAIL_START to=${to} hasKey=${!!apiKey} env=${env?.ENVIRONMENT}`)
+  if (!apiKey) {
+    console.log(`!!! CLIENT_PORTAL_DRIVE_EMAIL_STUB no key`)
+    return { success: true, source: 'stub' }
+  }
 
   try {
     const subject = 'Your Client Portal Folders'
@@ -257,9 +262,18 @@ export async function sendClientPortalDriveEmail(params: {
       headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${apiKey}` },
       body: JSON.stringify({ from, to, subject, html }),
     })
+    console.log(`!!! CLIENT_PORTAL_DRIVE_EMAIL_RESPONSE status=${res.status} ok=${res.ok}`)
+    if (!res.ok) {
+        const text = await res.text().catch(() => '')
+        const msg = `Resend client portal drive email failed ${res.status} ${text}`
+        console.log(`!!! CLIENT_PORTAL_DRIVE_EMAIL_FAILED ${msg}`)
+        return { success: false, source: 'live', error: msg }
+    }
     const json = (await res.json()) as any
+    console.log(`!!! CLIENT_PORTAL_DRIVE_EMAIL_SUCCESS id=${json.id}`)
     return { success: true, id: json.id, source: 'live' }
   } catch (e: any) {
+    console.log(`!!! CLIENT_PORTAL_DRIVE_EMAIL_EXCEPTION ${e?.message}`)
     return { success: false, source: 'live', error: e?.message }
   }
 }
@@ -275,7 +289,12 @@ export async function sendAdminDriveEmail(params: {
   const from = env?.EMAIL_FROM || env?.FROM || 'onboarding@resend.dev'
   const apiKey = getResendApiKey(env) || env?.RESEND_API_KEY
   
-  if (!apiKey) return { success: true, source: 'stub' }
+
+  console.log(`!!! ADMIN_DRIVE_EMAIL_START to=${to} hasKey=${!!apiKey} env=${env?.ENVIRONMENT}`)
+  if (!apiKey) {
+    console.log(`!!! ADMIN_DRIVE_EMAIL_STUB no key`)
+    return { success: true, source: 'stub' }
+  }
 
   try {
     const subject = `Admin Drive Update: ${firstName}`
@@ -285,9 +304,18 @@ export async function sendAdminDriveEmail(params: {
       headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${apiKey}` },
       body: JSON.stringify({ from, to, subject, html }),
     })
+    console.log(`!!! ADMIN_DRIVE_EMAIL_RESPONSE status=${res.status} ok=${res.ok}`)
+    if (!res.ok) {
+        const text = await res.text().catch(() => '')
+        const msg = `Resend admin drive email failed ${res.status} ${text}`
+        console.log(`!!! ADMIN_DRIVE_EMAIL_FAILED ${msg}`)
+        return { success: false, source: 'live', error: msg }
+    }
     const json = (await res.json()) as any
+    console.log(`!!! ADMIN_DRIVE_EMAIL_SUCCESS id=${json.id}`)
     return { success: true, id: json.id, source: 'live' }
   } catch (e: any) {
+    console.log(`!!! ADMIN_DRIVE_EMAIL_EXCEPTION ${e?.message}`)
     return { success: false, source: 'live', error: e?.message }
   }
 }

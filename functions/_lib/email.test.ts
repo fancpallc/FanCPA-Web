@@ -1,5 +1,5 @@
 import { describe, it, expect, vi } from 'vitest'
-import { buildConfirmationEmail, sendConfirmationEmail } from './email'
+import { buildConfirmationEmail, sendConfirmationEmail, buildClientPortalDriveEmail, sendClientPortalDriveEmail } from './email'
 
 describe('email lib — Resend confirmation with Meet link + cancelUrl', () => {
   it('should build email HTML with Meet link + cancelUrl + dateTime ET + purpose', () => {
@@ -87,4 +87,30 @@ describe('email lib — Resend confirmation with Meet link + cancelUrl', () => {
     expect(html).not.toContain('secret-id@group')
     expect(html).not.toContain('4b320f7127d04517322eed13a69ecb276f4f371ac7684a6c8d10a5c03b5bf4a0')
   })
+
+  describe('drive email helpers', () => {
+    it('should build client portal drive email with links', () => {
+        const html = buildClientPortalDriveEmail({
+            firstName: 'Jane',
+            driveLinks: [{ year: 2024, url: 'https://drive.google.com/2024' }, { year: 2025, url: 'https://drive.google.com/2025' }]
+        })
+        expect(html).toContain('Jane')
+        expect(html).toContain('2024')
+        expect(html).toContain('https://drive.google.com/2024')
+        expect(html).toContain('2025')
+        expect(html).toContain('https://drive.google.com/2025')
+    })
+
+    it('should return stub when API key is missing', async () => {
+        const result = await sendClientPortalDriveEmail({
+            to: 'jane@example.com',
+            firstName: 'Jane',
+            driveLinks: [],
+            env: { RESEND_API_KEY: '' } as any
+        })
+        expect(result.success).toBe(true)
+        expect(result.source).toBe('stub')
+    })
+  })
 })
+
