@@ -34,7 +34,7 @@ export interface OAuthCreateResult {
   error?: string
 }
 
-async function getOAuthAccessToken(env: any): Promise<{ accessToken: string; error?: string }> {
+export async function getOAuthAccessToken(env: any): Promise<{ accessToken: string; error?: string }> {
   const clientId = getOAuthClientId(env)
   const clientSecret = getOAuthClientSecret(env)
   const refreshToken = getOAuthRefreshToken(env)
@@ -45,7 +45,6 @@ async function getOAuthAccessToken(env: any): Promise<{ accessToken: string; err
     console.log('!!! OAUTH_TOKEN_MISSING missing OAuth config')
     return { accessToken: '', error: 'OAuth config missing — need CLIENT_ID, CLIENT_SECRET, REFRESH_TOKEN' }
   }
-
   try {
     const params = new URLSearchParams()
     params.append('client_id', clientId)
@@ -71,10 +70,10 @@ async function getOAuthAccessToken(env: any): Promise<{ accessToken: string; err
     const json = JSON.parse(text) as any
     console.log(`!!! OAUTH_TOKEN_SUCCESS hasAccessToken=${!!json.access_token} expiresIn=${json.expires_in}`)
     return { accessToken: json.access_token }
-  } catch (e: any) {
+        } catch (e: any) {
     console.log(`!!! OAUTH_TOKEN_EXCEPTION ${e?.message}`)
     return { accessToken: '', error: e?.message }
-  }
+        }
 }
 
 export async function createBookingEventViaOAuth(env: any, params: OAuthCreateParams): Promise<OAuthCreateResult> {
@@ -234,3 +233,4 @@ export async function createBookingEventViaOAuth(env: any, params: OAuthCreatePa
     }
   }
 }
+

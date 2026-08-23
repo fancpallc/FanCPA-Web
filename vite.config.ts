@@ -16,6 +16,7 @@ export default defineConfig({
       },
     },
   },
+  // @ts-ignore
   test: {
     globals: true,
     environment: 'jsdom',
@@ -24,3 +25,4 @@ export default defineConfig({
     exclude: ['functions/**/*', 'node_modules'],
   },
 })
+
