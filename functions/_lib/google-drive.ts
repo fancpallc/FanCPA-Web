@@ -194,7 +194,7 @@ export async function ensureClientDriveFolder(
     emailFolderUrl: `https://drive.google.com/drive/folders/${emailFolder.id}`,
     yearFolderId: yearFolder.id,
     yearFolderUrl: `https://drive.google.com/drive/folders/${yearFolder.id}`,
-    source: 'live',
+    source: source,
   }
 }
 
