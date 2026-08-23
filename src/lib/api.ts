@@ -270,3 +270,17 @@ export async function createBooking(payload: BookingPayload, options: FetchOptio
   }
 }
 
+export async function lookupClientPortal(payload: { email: string; turnstileToken: string }, options: FetchOptions = {}): Promise<{ success: boolean; message: string }> {
+  const res = await fetch('/api/client-portal/lookup', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify(payload),
+    ...options,
+  })
+  const json = await res.json()
+  if (!res.ok) {
+    throw new ApiError(`Request failed with ${res.status}`, res.status, json)
+  }
+  return json as { success: boolean; message: string }
+}
+

@@ -3,6 +3,7 @@ import { Layout } from './components/common/Layout'
 import { Home } from './pages/Home'
 import { Health } from './pages/Health'
 import { Admin } from './pages/Admin'
+import ClientPortal from './pages/ClientPortal'
 import { debug } from './lib/debug'
 import { useContent } from './hooks/useContent'
 
@@ -60,6 +61,10 @@ function App() {
     return <Admin />
   }
 
+  if (path.startsWith('/client-portal')) {
+    return <ClientPortal />
+  }
+
   return (
     <Layout title={siteName}>
       <Home />
@@ -68,3 +73,4 @@ function App() {
 }
 
 export default App
+
