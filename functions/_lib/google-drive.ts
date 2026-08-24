@@ -66,14 +66,19 @@ export async function createFolder(name: string, parentId: string, token: string
 
 export async function ensurePermission(folderId: string, email: string, token: string, role: string = 'writer'): Promise<void> {
   // List existing permissions to check if already shared
+  try {
   const response = await fetch(`https://www.googleapis.com/drive/v3/files/${folderId}/permissions`, {
     headers: { Authorization: `Bearer ${token}` }
   })
-  const data = (await response.json()) as { permissions?: { emailAddress?: string }[] }
+    if (!response.ok) {
+      console.error(`Failed to list permissions for folder ${folderId}: ${response.statusText}`)
+      return
+    }
+    const data = (await response.json()) as { permissions?: { emailAddress?: string; role?: string }[] }
   const exists = data.permissions?.some((p: any) => p.emailAddress === email)
 
   if (!exists) {
-    await fetch(`https://www.googleapis.com/drive/v3/files/${folderId}/permissions`, {
+      const shareResponse = await fetch(`https://www.googleapis.com/drive/v3/files/${folderId}/permissions`, {
       method: 'POST',
       headers: {
         Authorization: `Bearer ${token}`,
@@ -85,6 +90,12 @@ export async function ensurePermission(folderId: string, email: string, token: s
         emailAddress: email
       })
     })
+      if (!shareResponse.ok) {
+        console.error(`Failed to share folder ${folderId} with ${email}: ${shareResponse.statusText}`)
+  }
+}
+  } catch (error) {
+    console.error(`Error in ensurePermission for folder ${folderId}:`, error)
   }
 }
 
@@ -117,16 +128,18 @@ export async function ensureClientDriveFolder(
   // Live implementation
   const { token, source } = await getDriveAccessToken(env)
   if (source === 'stub') {
-  return {
+    console.log(`[DRIVE] Using stub for ${email}`)
+    return {
       emailFolderId: 'stub-folder',
-      emailFolderUrl: '#',
+      emailFolderUrl: 'https://drive.google.com/drive/folders/stub-folder',
       yearFolderId: 'stub-folder',
-      yearFolderUrl: '#',
+      yearFolderUrl: 'https://drive.google.com/drive/folders/stub-folder',
       source: 'stub'
+    }
   }
-}
 
   const rootId = getDriveRootFolderId(env) || 'root'
+  console.log(`[DRIVE] Ensuring folders for ${email} in root ${rootId}`)
 
   let emailFolder = await searchFolder(email, rootId, token)
   if (!emailFolder) {
