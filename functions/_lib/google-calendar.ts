@@ -396,6 +396,63 @@ export interface CreateEventResult {
   error?: string
 }
 
+export async function deleteBookingEvent(env: any, eventId: string, calendarId: string): Promise<boolean> {
+  const saKeyRaw = getGcalServiceKey(env) || env?.GCAL_SERVICE_ACCOUNT_KEY
+  if (!saKeyRaw) return false
+
+  try {
+    let saKey: any
+    if (typeof saKeyRaw === 'string') saKey = JSON.parse(saKeyRaw)
+    else saKey = saKeyRaw
+
+    const now = Math.floor(Date.now() / 1000)
+    const header = { alg: 'RS256', typ: 'JWT' }
+    const payload = {
+      iss: saKey.client_email,
+      scope: 'https://www.googleapis.com/auth/calendar',
+      aud: saKey.token_uri || 'https://oauth2.googleapis.com/token',
+      iat: now,
+      exp: now + 3600,
+    }
+
+    const enc = (obj: any) => btoa(JSON.stringify(obj)).replace(/\+/g, '-').replace(/\//g, '_').replace(/=+$/, '')
+
+    const pem = saKey.private_key
+    const pemBody = pem.replace(/-----BEGIN PRIVATE KEY-----/, '').replace(/-----END PRIVATE KEY-----/, '').replace(/\s/g, '')
+    const binaryDer = Uint8Array.from(atob(pemBody), (c) => c.charCodeAt(0))
+    const cryptoKey = await crypto.subtle.importKey('pkcs8', binaryDer, { name: 'RSASSA-PKCS1-v1_5', hash: 'SHA-256' }, false, ['sign'])
+    const headerB64 = enc(header)
+    const payloadB64 = enc(payload)
+    const data = new TextEncoder().encode(`${headerB64}.${payloadB64}`)
+    const sigBuf = await crypto.subtle.sign('RSASSA-PKCS1-v1_5', cryptoKey, data)
+    const sigArray = new Uint8Array(sigBuf)
+    let binary = ''
+    sigArray.forEach((b) => (binary += String.fromCharCode(b)))
+    const sigB64 = btoa(binary).replace(/\+/g, '-').replace(/\//g, '_').replace(/=+$/, '')
+    const jwt = `${headerB64}.${payloadB64}.${sigB64}`
+
+    const tokenRes = await fetch(saKey.token_uri || 'https://oauth2.googleapis.com/token', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
+      body: `grant_type=urn:ietf:params:grant-type:jwt-bearer&assertion=${jwt}`,
+    })
+
+    if (!tokenRes.ok) return false
+    const tokenJson = await tokenRes.json() as any
+    const accessToken = tokenJson.access_token
+
+    const res = await fetch(`https://www.googleapis.com/calendar/v3/calendars/${encodeURIComponent(calendarId)}/events/${encodeURIComponent(eventId)}`, {
+      method: 'DELETE',
+      headers: { Authorization: `Bearer ${accessToken}` },
+    })
+
+    return res.ok || res.status === 404
+  } catch (e) {
+    console.error('deleteBookingEvent failed', e)
+    return false
+  }
+}
+
 export async function createBookingEvent(env: any, params: CreateEventParams): Promise<CreateEventResult> {
   const saKeyRaw = getGcalServiceKey(env) || env?.GCAL_SERVICE_ACCOUNT_KEY
   const bookingId = getBookingCalendarId(env) || env?.BOOKING_CALENDAR_ID || env?.BOOKING

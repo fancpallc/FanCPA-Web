@@ -243,6 +243,15 @@ export async function sendAdminClientEmail(contact_id: string, options: FetchOpt
   })
 }
 
+export async function createManualBooking(body: any, options: FetchOptions = {}): Promise<any> {
+  const { json } = await fetchJson('/api/admin/bookings/manual', {
+    ...options,
+    method: 'POST',
+    body: JSON.stringify(body)
+  })
+  return json
+}
+
 export interface R2UsageResponse {
   checkQuota: boolean
   authed: boolean
