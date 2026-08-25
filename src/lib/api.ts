@@ -252,6 +252,14 @@ export async function createManualBooking(body: any, options: FetchOptions = {})
   return json
 }
 
+export async function deleteBooking(bookingId: string, cancelMeeting: boolean, options: FetchOptions = {}): Promise<any> {
+  const { json } = await fetchJson(`/api/admin/bookings/${encodeURIComponent(bookingId)}?cancelMeeting=${cancelMeeting}`, {
+    ...options,
+    method: 'DELETE',
+  })
+  return json
+}
+
 export interface R2UsageResponse {
   checkQuota: boolean
   authed: boolean

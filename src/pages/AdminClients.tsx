@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { useAdminAuth } from '../hooks/useAdminAuth';
-import { searchAdminClients, updateAdminDriveFolder, sendAdminClientEmail, createManualBooking, AdminClientRow } from '../lib/api';
+import { searchAdminClients, updateAdminDriveFolder, sendAdminClientEmail, createManualBooking, deleteBooking, AdminClientRow } from '../lib/api';
 import { toast } from 'react-hot-toast';
 import { Link } from 'react-router-dom';
 
@@ -14,6 +14,8 @@ export default function AdminClients() {
   const [editing, setEditing] = useState<Record<string, string>>({});
   const [showAddModal, setShowAddModal] = useState(false);
   const [newBooking, setNewBooking] = useState({ first_name: '', last_name: '', email: '', phone: '', purpose: '', slot_start: '', slot_end: '', sendEmail: false });
+  const [deleteTarget, setDeleteTarget] = useState<AdminClientRow | null>(null);
+  const [cancelMeetingChecked, setCancelMeetingChecked] = useState(true);
 
   const handleSearch = async (e?: React.FormEvent) => {
     e?.preventDefault();
@@ -76,6 +78,21 @@ export default function AdminClients() {
     }
   };
 
+  const handleDeleteBooking = async () => {
+    if (!deleteTarget?.booking_id) return;
+    setLoading(true);
+    try {
+      await deleteBooking(deleteTarget.booking_id, cancelMeetingChecked);
+      toast.success('Booking deleted');
+      setDeleteTarget(null);
+      handleSearch();
+    } catch (err: any) {
+      toast.error('Delete failed: ' + err.message);
+    } finally {
+      setLoading(false);
+    }
+  };
+
   if (authLoading) return <div>Loading...</div>;
   if (!isAuthed) return <div>Unauthorized</div>;
 
@@ -108,6 +125,23 @@ export default function AdminClients() {
             <div className="flex justify-end gap-2">
               <button onClick={() => setShowAddModal(false)} className="px-4 py-1">Cancel</button>
               <button onClick={handleCreateBooking} className="bg-blue-600 text-white px-4 py-1 rounded">Create</button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {deleteTarget && (
+        <div className="fixed inset-0 bg-black/50 flex justify-center items-center z-50">
+          <div className="bg-white p-6 rounded shadow w-full max-w-md">
+            <h2 className="text-lg font-bold mb-4">Confirm Delete</h2>
+            <p className="mb-4">Delete booking for {deleteTarget.first_name} {deleteTarget.last_name} at {deleteTarget.slot_start ? new Date(deleteTarget.slot_start).toLocaleString() : 'N/A'}? Drive folder will NOT be deleted.</p>
+            <label className="flex items-center gap-2 mb-4">
+              <input type="checkbox" checked={cancelMeetingChecked} onChange={e => setCancelMeetingChecked(e.target.checked)} />
+              Also cancel meeting and free calendar?
+            </label>
+            <div className="flex justify-end gap-2">
+              <button onClick={() => setDeleteTarget(null)} className="px-4 py-1">Cancel</button>
+              <button onClick={handleDeleteBooking} className="bg-red-600 text-white px-4 py-1 rounded">Delete</button>
             </div>
           </div>
         </div>
@@ -161,7 +195,12 @@ export default function AdminClients() {
                 />
                 <button onClick={() => handleSave(r.contact_id, r.year || new Date().getFullYear())} className="text-blue-600 ml-1">Save</button>
               </td>
-              <td className="p-2"><button onClick={() => handleSend(r.contact_id)} className="bg-green-600 text-white px-2 py-1 rounded">Send</button></td>
+              <td className="p-2">
+                <button onClick={() => handleSend(r.contact_id)} className="bg-green-600 text-white px-2 py-1 rounded">Send</button>
+                {r.booking_id && (
+                  <button onClick={() => setDeleteTarget(r)} className="bg-red-600 text-white px-2 py-1 rounded ml-1">Delete</button>
+                )}
+              </td>
             </tr>
           ))}
         </tbody>
