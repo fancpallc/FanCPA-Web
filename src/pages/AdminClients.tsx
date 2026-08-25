@@ -26,11 +26,12 @@ export default function AdminClients() {
     }
   };
 
-  const handleSave = async (contact_id: string, currentYear: number) => {
+  const handleSave = async (contact_id: string, year: number | undefined) => {
     const url = editing[contact_id];
     if (!url) return;
     try {
-      await updateAdminDriveFolder(contact_id, currentYear.toString(), url);
+      if (!year) throw new Error("Year missing");
+      await updateAdminDriveFolder(contact_id, year.toString(), url);
       toast.success('Drive link updated');
       handleSearch();
     } catch (err: any) {
@@ -76,7 +77,7 @@ export default function AdminClients() {
         <button type="submit" disabled={loading} className="bg-blue-600 text-white px-4 py-1 rounded">Search</button>
       </form>
 
-      <div className="text-sm mb-4">Effective Drive Root: {import.meta.env.VITE_GOOGLE_DRIVE_ROOT_FOLDER_ID || 'Not Configured'}</div>
+      <div className="text-sm mb-4">Effective Drive Root: Configured via Cloudflare env GOOGLE_DRIVE_ROOT_FOLDER_ID</div>
 
       <table className="w-full text-sm">
         <thead>
@@ -84,6 +85,8 @@ export default function AdminClients() {
             <th className="p-2">Name</th>
             <th className="p-2">Email</th>
             <th className="p-2">Meeting Time</th>
+            <th className="p-2">Purpose</th>
+            <th className="p-2">Timezone</th>
             <th className="p-2">Meeting URL</th>
             <th className="p-2">GDrive Link</th>
             <th className="p-2">Actions</th>
@@ -91,18 +94,20 @@ export default function AdminClients() {
         </thead>
         <tbody>
           {results.map(r => (
-            <tr key={r.contact_id} className="border-b">
+            <tr key={`${r.contact_id}-${r.booking_id || 'no-booking'}`} className="border-b">
               <td className="p-2">{r.first_name} {r.last_name}</td>
               <td className="p-2">{r.email}</td>
               <td className="p-2">{r.slot_start ? new Date(r.slot_start).toLocaleString() : '-'}</td>
+              <td className="p-2">{r.purpose}</td>
+              <td className="p-2">{r.time_zone}</td>
               <td className="p-2 text-xs truncate max-w-[100px]">{r.meet_link}</td>
               <td className="p-2">
                 <input 
-                  defaultValue={r.year_folder_url || ''} 
+                  value={editing[r.contact_id] !== undefined ? editing[r.contact_id] : (r.year_folder_url || '')}
                   onChange={e => setEditing({...editing, [r.contact_id]: e.target.value})}
                   className="border p-1 w-full"
                 />
-                <button onClick={() => handleSave(r.contact_id, new Date().getFullYear())} className="text-blue-600 ml-1">Save</button>
+                <button onClick={() => handleSave(r.contact_id, r.year || new Date().getFullYear())} className="text-blue-600 ml-1">Save</button>
               </td>
               <td className="p-2"><button onClick={() => handleSend(r.contact_id)} className="bg-green-600 text-white px-2 py-1 rounded">Send</button></td>
             </tr>

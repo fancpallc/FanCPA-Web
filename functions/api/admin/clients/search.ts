@@ -10,15 +10,15 @@ export const onRequestGet: PagesFunction<Env> = async ({ request, env }) => {
   const startDate = url.searchParams.get('start_date')
   const endDate = url.searchParams.get('end_date')
 
-  if (!q) {
+  if (!q && !startDate && !endDate) {
     return new Response(JSON.stringify({ results: [] }), {
       headers: { 'Content-Type': 'application/json' },
     })
   }
 
   const db = env.DB as any
-  const searchQuery = `%${q.toLowerCase()}%`
-
+  const binds: any[] = []
+  let idx = 1
   let query = `
     SELECT 
         c.id as contact_id, 
@@ -35,13 +35,17 @@ export const onRequestGet: PagesFunction<Env> = async ({ request, env }) => {
     FROM contacts c 
     LEFT JOIN bookings b ON b.contact_id = c.id AND b.status = 'confirmed'
     LEFT JOIN client_drive_folders cdf ON cdf.contact_id = c.id
-    WHERE (lower(c.email) LIKE ?1
-       OR lower(c.first_name) LIKE ?1 
-       OR lower(c.last_name) LIKE ?1)
+    WHERE 1=1
   `
 
-  const binds: any[] = [searchQuery]
-  let idx = 2
+  if (q) {
+    const searchQuery = `%${q.toLowerCase().replace(/%/g, '\\%').replace(/_/g, '\\_')}%`
+    query += ` AND (lower(c.email) LIKE ?${idx} ESCAPE '\\'
+       OR lower(c.first_name) LIKE ?${idx} ESCAPE '\\'
+       OR lower(c.last_name) LIKE ?${idx} ESCAPE '\\')`
+    binds.push(searchQuery)
+    idx++
+  }
   if (startDate) {
     query += ` AND datetime(b.slot_start) >= datetime(?${idx}) `
     binds.push(startDate)
