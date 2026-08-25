@@ -46,7 +46,7 @@ describe('ClientPortal', () => {
     fireEvent.click(button);
 
     await waitFor(() => {
-        expect(screen.getByText(/If your email exists, we sent a link/i)).toBeDefined();
+        expect(screen.getByText(/If an account with that email exists, we have sent a link to your inbox\./i)).toBeDefined();
     });
   });
 });
