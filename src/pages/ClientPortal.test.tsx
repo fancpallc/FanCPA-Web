@@ -25,14 +25,29 @@ describe('ClientPortal', () => {
 
     render(<ClientPortal />);
 
-    // Simulate setting token
-    const button = screen.getByRole('button', { name: /send access link/i });
+    // Manually trigger the Turnstile callback if possible or expose a test way
+    // For this test, we will assume we can mock window.turnstile
+    (window as any).turnstile = {
+      render: vi.fn((_el, options) => {
+        options.callback('mock-token');
+        return 'widget-id';
+      }),
+      remove: vi.fn(),
+    };
 
-    // We need to bypass Turnstile check or simulate setTurnstileToken.
-    // Since we are mocking the internal state, we can't directly trigger setTurnstileToken without refactoring.
-    // However, the component relies on window.turnstile.render's callback.
-    // For test, we will just manually set the token or trigger the callback.
-    // Given the component structure, I will add a way to test this.
+    const input = screen.getByPlaceholderText('Enter your email');
+    fireEvent.change(input, { target: { value: 'test@example.com' } });
+    const button = screen.getByRole('button', { name: /send access link/i }) as HTMLButtonElement;
+
+    await waitFor(() => {
+        expect(button.disabled).toBe(false);
+    });
+
+    fireEvent.click(button);
+
+    await waitFor(() => {
+        expect(screen.getByText(/If your email exists, we sent a link/i)).toBeDefined();
+    });
   });
 });
 
