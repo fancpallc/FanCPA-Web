@@ -85,7 +85,7 @@ export interface FetchOptions {
 }
 
 export async function fetchJson(url: string, options: FetchOptions & { method?: string; body?: string } = {}) {
-  const { timeoutMs = 5000, signal, method = 'GET', cache, body } = options as any
+  const { timeoutMs = 8000, signal, method = 'GET', cache, body } = options as any
   const controller = new AbortController()
   const timeout = setTimeout(() => controller.abort(new Error(`timeout after ${timeoutMs}ms`)), timeoutMs)
   if (signal) {
@@ -205,13 +205,32 @@ export interface AdminClientRow {
   first_name: string
   last_name: string
   email: string
+  phone?: string
   booking_id?: string
   meet_link?: string
   purpose?: string
   slot_start?: string
+  slot_end?: string
   time_zone?: string
+  status?: string
+  cancel_token?: string
   year?: number
   year_folder_url?: string
+  drive_folder_url?: string
+  drive_folder_id?: string
+}
+
+export interface AdminClientCard {
+  contact_id: string
+  first_name: string
+  last_name: string
+  email: string
+  phone?: string
+  drive_folder_url?: string | null
+  drive_folder_id?: string | null
+  drive_is_manual?: number
+  year_folders: { year: number; folder_url: string; folder_id?: string; parent_folder_id?: string; is_manual?: number }[]
+  meetings: AdminClientRow[]
 }
 
 export async function fetchAdminAuth(options: FetchOptions = {}): Promise<AdminAuthResponse> {
@@ -219,44 +238,141 @@ export async function fetchAdminAuth(options: FetchOptions = {}): Promise<AdminA
   return json as AdminAuthResponse
 }
 
-export async function searchAdminClients(q: string, opts?: { startDate?: string; endDate?: string }, options: FetchOptions = {}): Promise<AdminClientRow[]> {
+export interface SearchAdminClientsResult {
+  results: AdminClientRow[] // legacy compat
+  clients: AdminClientCard[]
+}
+
+export async function searchAdminClients(
+  q: string,
+  opts?: { startDate?: string; endDate?: string },
+  options: FetchOptions = {}
+): Promise<AdminClientRow[]> {
   const params = new URLSearchParams({ q })
   if (opts?.startDate) params.set('start_date', opts.startDate)
   if (opts?.endDate) params.set('end_date', opts.endDate)
   const { json } = await fetchJson(`/api/admin/clients/search?${params.toString()}`, { ...options })
-  return (json as any).results
+  // Prefer grouped clients when present, but return legacy for old callers
+  return (json as any).results as AdminClientRow[]
 }
 
-export async function updateAdminDriveFolder(contact_id: string, year: string, folder_url: string, options: FetchOptions = {}): Promise<void> {
+export async function searchAdminClientsGrouped(
+  q: string,
+  opts?: { startDate?: string; endDate?: string },
+  options: FetchOptions = {}
+): Promise<AdminClientCard[]> {
+  const params = new URLSearchParams({ q })
+  if (opts?.startDate) params.set('start_date', opts.startDate)
+  if (opts?.endDate) params.set('end_date', opts.endDate)
+  const { json } = await fetchJson(`/api/admin/clients/search?${params.toString()}`, { ...options })
+  const data = json as any
+  if (Array.isArray(data.clients) && data.clients.length > 0) return data.clients as AdminClientCard[]
+  // Fallback: group legacy results client-side
+  const results: AdminClientRow[] = data.results || []
+  const map = new Map<string, AdminClientCard>()
+  for (const r of results) {
+    if (!map.has(r.contact_id)) {
+      map.set(r.contact_id, {
+        contact_id: r.contact_id,
+        first_name: r.first_name,
+        last_name: r.last_name,
+        email: r.email,
+        drive_folder_url: (r as any).drive_folder_url || r.year_folder_url || null,
+        drive_folder_id: (r as any).drive_folder_id || null,
+        drive_is_manual: 0,
+        year_folders: [],
+        meetings: [],
+      })
+    }
+    if (r.booking_id) {
+      map.get(r.contact_id)!.meetings.push(r)
+    }
+  }
+  return Array.from(map.values())
+}
+
+export async function updateAdminDriveFolder(contact_id: string, yearOrUrl: string, folder_url?: string, options: FetchOptions = {}): Promise<void> {
+  // L1 fix: remove brittle startsWith('http') overload — year is always 4 digits, URL never is.
+  // - updateAdminDriveFolder(contact_id, year, url) → year-level
+  // - updateAdminDriveFolder(contact_id, url) → client-level (deprecated, use updateAdminDriveFolderClientLevel)
+  // Production uses updateAdminDriveFolderClientLevel; this remains only for legacy tests.
+  if (folder_url) {
+    await fetchJson('/api/admin/clients/drive-folder', {
+      timeoutMs: (options as any).timeoutMs ?? 10000,
+      ...(options as any),
+      method: 'PATCH',
+      body: JSON.stringify({ contact_id, year: yearOrUrl, folder_url }),
+    })
+  } else {
+    await fetchJson('/api/admin/clients/drive-folder', {
+      timeoutMs: (options as any).timeoutMs ?? 10000,
+      ...(options as any),
+      method: 'PATCH',
+      body: JSON.stringify({ contact_id, folder_url: yearOrUrl }),
+    })
+  }
+}
+
+export async function updateAdminDriveFolderClientLevel(contact_id: string, folder_url: string, options: FetchOptions = {}): Promise<void> {
   await fetchJson('/api/admin/clients/drive-folder', {
-    ...options,
+    timeoutMs: (options as any).timeoutMs ?? 10000,
+    ...(options as any),
     method: 'PATCH',
-    body: JSON.stringify({ contact_id, year, folder_url })
+    body: JSON.stringify({ contact_id, folder_url }),
   })
 }
 
-export async function sendAdminClientEmail(contact_id: string, options: FetchOptions = {}): Promise<void> {
-  await fetchJson('/api/admin/clients/send-email', {
-    ...options,
+export interface SendAdminEmailResult {
+  success: boolean
+  sentTo: string
+  meetingsCount: number
+  driveLink: string
+  emailResult?: any
+}
+
+export async function sendAdminClientEmail(contact_id: string, bookingIds?: string[], options: FetchOptions = {}): Promise<SendAdminEmailResult> {
+  const { json } = await fetchJson('/api/admin/clients/send-email', {
+    timeoutMs: (options as any).timeoutMs ?? 15000,
+    ...(options as any),
     method: 'POST',
-    body: JSON.stringify({ contact_id })
+    body: JSON.stringify({ contact_id, ...(bookingIds && bookingIds.length ? { booking_ids: bookingIds } : {}) }),
   })
+  return json as any
 }
 
 export async function createManualBooking(body: any, options: FetchOptions = {}): Promise<any> {
   const { json } = await fetchJson('/api/admin/bookings/manual', {
+    timeoutMs: (options as any).timeoutMs ?? 20000,
     ...options,
     method: 'POST',
-    body: JSON.stringify(body)
+    body: JSON.stringify(body),
   })
   return json
 }
 
-export async function deleteBooking(bookingId: string, cancelMeeting: boolean, options: FetchOptions = {}): Promise<any> {
-  const { json } = await fetchJson(`/api/admin/bookings/${encodeURIComponent(bookingId)}?cancelMeeting=${cancelMeeting}`, {
-    ...options,
-    method: 'DELETE',
-  })
+export async function deleteBooking(
+  bookingId: string,
+  cancelMeeting: boolean,
+  opts?: { notifyClient?: boolean } | boolean,
+  options: FetchOptions = {}
+): Promise<any> {
+  // Back-compat: third arg can be notifyClient boolean or options object
+  let notifyClient: boolean | undefined
+  let fetchOpts: FetchOptions = options
+  if (typeof opts === 'object' && opts !== null && !Array.isArray(opts) && ('notifyClient' in opts || Object.keys(opts).length === 0)) {
+    // Actually this overload is ambiguous; handle as {notifyClient} when object has that key
+    if ('notifyClient' in (opts as any)) {
+      notifyClient = (opts as any).notifyClient
+      fetchOpts = options
+    } else {
+      fetchOpts = opts as FetchOptions
+    }
+  } else if (typeof opts === 'boolean') {
+    notifyClient = opts
+  }
+  let url = `/api/admin/bookings/${encodeURIComponent(bookingId)}?cancelMeeting=${cancelMeeting}`
+  if (notifyClient !== undefined) url += `&notifyClient=${notifyClient}`
+  const { json } = await fetchJson(url, { timeoutMs: (fetchOpts as any).timeoutMs ?? 15000, ...(fetchOpts as any), method: 'DELETE' })
   return json
 }
 

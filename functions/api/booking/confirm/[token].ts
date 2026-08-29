@@ -180,14 +180,67 @@ export const onRequestGet: PagesFunction<Env> = async ({ params, env, request })
         }
       }
 
+      // Drive: non-blocking per §5 + PR-3 — booking succeeds even if Drive fails, email without drive link.
+      // Calendar event already created above; returning 502 here would leak duplicate calendar events on retry.
       try {
-        driveResult = await ensureClientDriveFolder(env, pending.email, meetingYear)
-        driveLink = driveResult?.yearFolderUrl
-        const upsert = db.prepare(`INSERT INTO client_drive_folders (contact_id,email,year,folder_id,folder_url,parent_folder_id,parent_folder_url) VALUES (?1,?2,?3,?4,?5,?6,?7) ON CONFLICT(contact_id,year) DO UPDATE SET folder_url=excluded.folder_url, updated_at=datetime('now')`)
-        await upsert.bind(contactId, pending.email.toLowerCase(), meetingYear, driveResult.yearFolderId, driveResult.yearFolderUrl, driveResult.emailFolderId, driveResult.emailFolderUrl).run()
-        await db.prepare('UPDATE contacts SET drive_folder_url=?1 WHERE id=?2').bind(driveResult.emailFolderUrl, contactId).run()
+        // F4: honor client-level override — new years filed under admin-chosen folder
+        let parentFolderId: string | undefined
+        try {
+          const c = (await db.prepare('SELECT drive_folder_id, drive_is_manual FROM contacts WHERE id = ?1').bind(contactId).first()) as any
+          if (c?.drive_is_manual && c?.drive_folder_id) parentFolderId = c.drive_folder_id
+        } catch {}
+        try {
+          driveResult = await ensureClientDriveFolder(env, pending.email, meetingYear, { parentFolderId, db })
+          const isStub = driveResult?.source === 'stub'
+          const isFakeId = String(driveResult?.yearFolderId || '').startsWith('fake-') || String(driveResult?.emailFolderId || '').startsWith('fake-')
+          // Gate fake persistence on expectedLive (matching manual.ts:137,145) — in local/stub keep fake rows so PR-3 verifications and client-portal flow stay exercisable.
+          // In live, refuse to persist fake and make Drive non-blocking (no 502, booking succeeds without link).
+          if (expectedLive && (isStub || isFakeId)) {
+            console.log(`!!! CONFIRM_DRIVE_STUB_FAIL_NONBLOCKING source=${driveResult?.source} fake=${isFakeId} error=${driveResult?.error} — booking succeeds without Drive link, refusing to persist fake`)
+            driveResult = null
+            driveLink = null
+          } else {
+            if (isStub || isFakeId) {
+              console.log(`!!! CONFIRM_DRIVE_STUB_PERSIST_NONLIVE source=${driveResult?.source} fake=${isFakeId} — persisting fake for local dev exercisability`)
+            }
+            driveLink = driveResult?.yearFolderUrl
+            // M10 fix: refresh all folder ids on conflict, not just folder_url
+            const upsert = db.prepare(
+              `INSERT INTO client_drive_folders (contact_id,email,year,folder_id,folder_url,parent_folder_id,parent_folder_url)
+               VALUES (?1,?2,?3,?4,?5,?6,?7)
+               ON CONFLICT(contact_id,year) DO UPDATE SET
+                 folder_id=excluded.folder_id,
+                 folder_url=excluded.folder_url,
+                 parent_folder_id=excluded.parent_folder_id,
+                 parent_folder_url=excluded.parent_folder_url,
+                 email=excluded.email,
+                 updated_at=datetime('now')`
+            )
+            await upsert
+              .bind(contactId, pending.email.toLowerCase(), meetingYear, driveResult.yearFolderId, driveResult.yearFolderUrl, driveResult.emailFolderId, driveResult.emailFolderUrl)
+              .run()
+            try {
+              await db
+                .prepare('UPDATE contacts SET drive_folder_url=?1, drive_folder_id=COALESCE(drive_folder_id,?2) WHERE id=?3')
+                .bind(driveResult.emailFolderUrl, driveResult.emailFolderId, contactId)
+                .run()
+            } catch {
+              await db.prepare('UPDATE contacts SET drive_folder_url=?1 WHERE id=?2').bind(driveResult.emailFolderUrl, contactId).run().catch(() => {})
+            }
+          }
+        } catch (e: any) {
+          if (expectedLive) {
+            console.log(`!!! CONFIRM_DRIVE_ERROR_LIVE_NONBLOCKING ${e?.message} — booking succeeds without drive link, logging loudly`)
+          } else {
+            console.log(`!!! CONFIRM_DRIVE_ERROR_NONBLOCKING ${e?.message} — non-blocking`)
+          }
+          driveResult = null
+          driveLink = null
+        }
       } catch (e: any) {
-        console.log(`!!! CONFIRM_DRIVE_ERROR ${e.message}`)
+        console.log(`!!! CONFIRM_DRIVE_OUTER_ERROR ${e?.message} — non-blocking, will still attempt booking insert without drive link`)
+        driveResult = null
+        driveLink = null
       }
 
       // The pending row already carries the slot the visitor picked; carry it across so

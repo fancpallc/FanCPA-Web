@@ -1,5 +1,5 @@
 import { getBookingCalendarId, getPersonalCalendarId, getGcalServiceKey, hasOAuthConfig } from './env'
-import { createBookingEventViaOAuth } from './google-oauth'
+import { createBookingEventViaOAuth, getOAuthAccessToken } from './google-oauth'
 
 export interface WorkingHours {
   start: string // "09:00"
@@ -397,8 +397,46 @@ export interface CreateEventResult {
 }
 
 export async function deleteBookingEvent(env: any, eventId: string, calendarId: string): Promise<boolean> {
-  const saKeyRaw = getGcalServiceKey(env) || env?.GCAL_SERVICE_ACCOUNT_KEY
-  if (!saKeyRaw) return false
+  // Nothing to delete for stubs — treat as success so admin DB cleanup can proceed
+  if (!eventId || String(eventId).startsWith('stub-') || String(eventId).startsWith('missing-')) {
+    console.log(`!!! DELETE_BOOKING_EVENT_SKIP_STUB eventId=${eventId}`)
+    return true
+  }
+  if (!calendarId) {
+    console.log(`!!! DELETE_BOOKING_EVENT_NO_CALENDAR_ID eventId=${eventId}`)
+    return false
+  }
+
+  // Option B (documented): OAuth refresh-token flow — try first
+  if (hasOAuthConfig(env)) {
+    try {
+      const { accessToken, error: tokenErr } = await getOAuthAccessToken(env)
+      if (!accessToken) {
+        console.log(`!!! DELETE_BOOKING_EVENT_OAUTH_NO_TOKEN error=${tokenErr}`)
+      } else {
+        const res = await fetch(`https://www.googleapis.com/calendar/v3/calendars/${encodeURIComponent(calendarId)}/events/${encodeURIComponent(eventId)}?sendUpdates=all`, {
+          method: 'DELETE',
+          headers: { Authorization: `Bearer ${accessToken}` },
+        })
+        if (res.ok || res.status === 404 || res.status === 410) {
+          console.log(`!!! DELETE_BOOKING_EVENT_OAUTH_OK status=${res.status} calendarId=${calendarId.slice(0, 8)}...`)
+          return true
+        }
+        const txt = await res.text().catch(() => '')
+        console.log(`!!! DELETE_BOOKING_EVENT_OAUTH_FAIL status=${res.status} body=${txt.slice(0, 300)}`)
+        // fall through to SA attempt – OAuth token may be scoped to booking calendar only
+      }
+    } catch (e: any) {
+      console.log(`!!! DELETE_BOOKING_EVENT_OAUTH_EXCEPTION ${e?.message}`)
+    }
+  }
+
+  // Option A: Service Account JWT
+  const saKeyRaw = getGcalServiceKey(env) || (env as any)?.GCAL_SERVICE_ACCOUNT_KEY
+  if (!saKeyRaw) {
+    console.log(`!!! DELETE_BOOKING_EVENT_NO_CREDENTIALS eventId=${eventId} calendarId=${calendarId.slice(0, 8)}... hasOAuth=${hasOAuthConfig(env)}`)
+    return false
+  }
 
   try {
     let saKey: any
@@ -434,20 +472,32 @@ export async function deleteBookingEvent(env: any, eventId: string, calendarId: 
     const tokenRes = await fetch(saKey.token_uri || 'https://oauth2.googleapis.com/token', {
       method: 'POST',
       headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
-      body: `grant_type=urn:ietf:params:grant-type:jwt-bearer&assertion=${jwt}`,
+      // Fixed typo: was urn:ietf:params:grant-type:jwt-bearer (missing oauth:), Google returns 400 unsupported_grant_type
+      body: `grant_type=urn:ietf:params:oauth:grant-type:jwt-bearer&assertion=${jwt}`,
     })
 
-    if (!tokenRes.ok) return false
+    if (!tokenRes.ok) {
+      const txt = await tokenRes.text().catch(() => '')
+      console.log(`!!! DELETE_BOOKING_EVENT_SA_TOKEN_FAIL status=${tokenRes.status} body=${txt.slice(0, 300)}`)
+      return false
+    }
     const tokenJson = await tokenRes.json() as any
     const accessToken = tokenJson.access_token
+    if (!accessToken) return false
 
-    const res = await fetch(`https://www.googleapis.com/calendar/v3/calendars/${encodeURIComponent(calendarId)}/events/${encodeURIComponent(eventId)}`, {
+    const res = await fetch(`https://www.googleapis.com/calendar/v3/calendars/${encodeURIComponent(calendarId)}/events/${encodeURIComponent(eventId)}?sendUpdates=all`, {
       method: 'DELETE',
       headers: { Authorization: `Bearer ${accessToken}` },
     })
 
-    return res.ok || res.status === 404
-  } catch (e) {
+    if (res.ok || res.status === 404 || res.status === 410) {
+      console.log(`!!! DELETE_BOOKING_EVENT_SA_OK status=${res.status}`)
+      return true
+    }
+    const txt = await res.text().catch(() => '')
+    console.log(`!!! DELETE_BOOKING_EVENT_SA_FAIL status=${res.status} body=${txt.slice(0, 300)}`)
+    return false
+  } catch (e: any) {
     console.error('deleteBookingEvent failed', e)
     return false
   }

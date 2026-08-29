@@ -34,12 +34,28 @@ services:
       - fancpa-net
 
   tests:
-    image: node:20-alpine
+    image: node:24-alpine
     working_dir: /app
     volumes:
       - .:/app
       - /app/node_modules
-    command: sh -c "npm install --no-audit --no-fund && npm run lint && npm run build && npm test -- --run && npm run test:workers -- --run"
+    environment:
+      - FORCE_COLOR=0
+      - NO_COLOR=1
+    # Fail-loud, success-quiet: lint/build logs only shown on failure; tests use dot reporter and silenced !!! traces
+    # Uses YAML literal block to preserve newlines — previous double-quoted multiline collapsed to spaces, merging set -e and set -o pipefail into one broken builtin.
+    command:
+      - sh
+      - -c
+      - |
+        set -e
+        set -o pipefail
+        npm ci --silent --no-audit --no-fund
+        npm run lint --silent
+        echo '[lint ok]'
+        (npm run build --silent > /tmp/build.log 2>&1 && echo '[build ok]' || (cat /tmp/build.log && exit 1))
+        npm test -- --run --reporter=dot 2>&1 | grep -E 'Test Files|Tests|passed|failed|RUN|·+|\.+|Duration' | grep -v 'was not wrapped in act'
+        npm run test:workers -- --run --reporter=dot 2>&1 | grep -E 'Test Files|Tests|passed|failed|RUN|·+|\.+|Duration'
     networks:
       - fancpa-net
     profiles:

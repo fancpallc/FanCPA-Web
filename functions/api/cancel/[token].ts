@@ -1,4 +1,5 @@
-import { getBookingCalendarId, getGcalServiceKey } from '../../_lib/env'
+import { getBookingCalendarId, getGcalServiceKey, hasOAuthConfig } from '../../_lib/env'
+import { getOAuthAccessToken } from '../../_lib/google-oauth'
 
 export interface Env {
   DB?: any
@@ -7,6 +8,12 @@ export interface Env {
   BOOKING_CALENDAR?: string
   GCAL_SERVICE_ACCOUNT_KEY?: string
   GOOGLE_SERVICE_ACCOUNT_KEY?: string
+  GOOGLE_OAUTH_CLIENT_ID?: string
+  GOOGLE_OAUTH_CLIENT_SECRET?: string
+  GOOGLE_OAUTH_REFRESH_TOKEN?: string
+  OAUTH_CLIENT_ID?: string
+  OAUTH_CLIENT_SECRET?: string
+  OAUTH_REFRESH_TOKEN?: string
   SITE_URL?: string
   ENVIRONMENT?: string
   STUB?: string
@@ -16,11 +23,35 @@ export interface Env {
 async function deleteCalendarEvent(env: Env, calendarEventId: string): Promise<{ success: boolean; source: 'live' | 'stub'; error?: string }> {
   const saKeyRaw = getGcalServiceKey(env) || (env as any)?.GCAL_SERVICE_ACCOUNT_KEY
   const bookingId = getBookingCalendarId(env) || (env as any)?.BOOKING_CALENDAR_ID || (env as any)?.BOOKING
-  const isStub = !saKeyRaw || !bookingId || env?.STUB === 'true' || env?.ENVIRONMENT === 'test' || env?.ENVIRONMENT === 'local'
+  const hasCreds = !!saKeyRaw || hasOAuthConfig(env)
+  const isStub = !hasCreds || !bookingId || env?.STUB === 'true' || env?.ENVIRONMENT === 'test' || env?.ENVIRONMENT === 'local'
 
   if (isStub) {
     console.log(`[STUB Cancel] Would delete event ${calendarEventId} from calendar ${bookingId || 'stub'}`)
     return { success: true, source: 'stub' }
+  }
+
+  // Try OAuth first (Option B) — documented setup
+  if (hasOAuthConfig(env)) {
+    try {
+      const { accessToken, error: tokenErr } = await getOAuthAccessToken(env)
+      if (accessToken) {
+        const deleteRes = await fetch(`https://www.googleapis.com/calendar/v3/calendars/${encodeURIComponent(bookingId!)}/events/${encodeURIComponent(calendarEventId)}?sendUpdates=all`, {
+          method: 'DELETE',
+          headers: { Authorization: `Bearer ${accessToken}` },
+        })
+        if (deleteRes.ok || deleteRes.status === 404 || deleteRes.status === 410) {
+          return { success: true, source: 'live' }
+        }
+        const txt = await deleteRes.text().catch(() => '')
+        console.log(`!!! CANCEL_OAUTH_DELETE_FAIL status=${deleteRes.status} body=${txt.slice(0, 300)}`)
+        // fall through to SA attempt
+      } else {
+        console.log(`!!! CANCEL_OAUTH_NO_TOKEN error=${tokenErr}`)
+      }
+    } catch (e: any) {
+      console.log(`!!! CANCEL_OAUTH_EXCEPTION ${e?.message}`)
+    }
   }
 
   try {

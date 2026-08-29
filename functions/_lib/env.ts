@@ -159,11 +159,17 @@ export function getDriveRootFolderId(env: any) { return resolveEnvVar(env, DRIVE
 export function getDriveServiceKey(env: any) { return resolveEnvVar(env, DRIVE_KEY_ALIASES) }
 export function getDriveOwnerEmail(env: any) { return resolveEnvVar(env, DRIVE_OWNER_ALIASES) }
 export async function getEffectiveDriveRootFolderId(env: any, db: any) {
-  // try admin_settings if exists else env else undefined
-  try {
-    const setting = await db.prepare('SELECT value FROM settings WHERE key = "drive_root_folder_id"').first() as any
-    if (setting?.value) return setting.value
-  } catch {}
+  // Plans mention admin_settings but migration never created it; try both admin_settings
+  // and settings for forwards-compat, use correct single-quote string literal.
+  const tables = ['admin_settings', 'settings']
+  for (const table of tables) {
+    try {
+      const setting = await db
+        .prepare(`SELECT value FROM ${table} WHERE key = 'drive_root_folder_id'`)
+        .first() as any
+      if (setting?.value) return String(setting.value).trim() || undefined
+    } catch {}
+  }
   return getDriveRootFolderId(env)
 }
 

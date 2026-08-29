@@ -66,6 +66,22 @@ docker compose run --rm tests
 
 - **Email**: Resend `api.resend.com/emails` verified domain `bookings@yourdomain.com` (Env: `EMAIL_FROM`) — Includes Meet + cancel + purpose + dateTime ET. **Gmail API fallback** (`sendViaGmail`) via OAuth `GOOGLE_OAUTH_*` if Resend unavailable.
 
+## Drive setup — Option B OAuth (current)
+
+1. Google Cloud Console → project `fancpa-all` → APIs: enable Calendar + Drive.
+2. OAuth consent screen → add scope `https://www.googleapis.com/auth/drive.file` alongside `calendar` and `calendar.events`.
+3. Credentials → OAuth 2.0 Client → regenerate **refresh token** with the new drive scope (offline access).
+4. Create a root folder in My Drive (e.g. "FanCPA Clients") → share nothing; copy its ID from URL `https://drive.google.com/drive/folders/<ID>` → `GOOGLE_DRIVE_ROOT_FOLDER_ID`.
+5. Set env vars in Cloudflare Dashboard (production/preview) and in `.dev.vars` locally:
+   ```
+   GOOGLE_OAUTH_CLIENT_ID, GOOGLE_OAUTH_CLIENT_SECRET, GOOGLE_OAUTH_REFRESH_TOKEN,
+   GOOGLE_DRIVE_ROOT_FOLDER_ID (optional, defaults to My Drive root),
+   GOOGLE_DRIVE_OWNER_EMAIL (optional, skip sharing when email equals owner)
+   ```
+6. Flow: `email / year` folder created under root, shared Writer with client; new years filed under same email parent; admin override via `contacts.drive_folder_id` moves future year folders.
+
+Local/test/stub: returns `fake-*` Drive links; no real API calls (`ENVIRONMENT=local|test` or `STUB=true` or missing OAuth config → stub).
+
 ## API
 
 ### `GET /api/health`

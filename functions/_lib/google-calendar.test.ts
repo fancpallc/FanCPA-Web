@@ -43,10 +43,12 @@ describe('google-calendar lib — slot math', () => {
   })
 
   it('should respect working days 1-5 filter (Mon-Fri) — weekend no slots', () => {
-    const monday = new Date('2026-07-20T00:00:00Z') // Monday
-    const saturday = new Date('2026-07-25T00:00:00Z') // Saturday
-    expect(filterWorkingDays([monday, saturday], [1,2,3,4,5]).length).toBe(1)
-    expect(filterWorkingDays([monday, saturday], [1,2,3,4,5])[0].getDay()).toBe(1)
+    // Use noon UTC so local getDay() matches UTC for all US timezones (day boundary at noon is safe)
+    const monday = new Date('2026-07-20T12:00:00Z') // Monday noon UTC
+    const saturday = new Date('2026-07-25T12:00:00Z') // Saturday noon UTC
+    const filtered = filterWorkingDays([monday, saturday], [1, 2, 3, 4, 5])
+    expect(filtered.length).toBe(1)
+    expect(filtered[0].getDay()).toBe(1)
   })
 
   it('should handle busy all day → 0 available (Eastern 09-17 ET =13-21 UTC)', () => {
@@ -125,20 +127,27 @@ describe('google-calendar lib — slot math', () => {
   it('should generate 14 days from today (not full month) for calendar display', () => {
     const days = getNext14Days(0)
     expect(days.length).toBe(14)
-    // First day should be today (midnight)
-    const todayStr = new Date().toISOString().split('T')[0]
-    expect(days[0].toISOString().split('T')[0]).toBe(todayStr)
+    // getNext14Days uses local midnight; compare using local date parts to stay tz-independent
+    const todayLocal = new Date()
+    todayLocal.setHours(0, 0, 0, 0)
+    const firstLocal = new Date(days[0])
+    firstLocal.setHours(0, 0, 0, 0)
+    expect(firstLocal.getTime()).toBe(todayLocal.getTime())
   })
 
   it('should exclude today when minNoticeDays is 1', () => {
     const days = getNext14Days(1)
     expect(days.length).toBe(14)
-    const todayStr = new Date().toISOString().split('T')[0]
-    expect(days[0].toISOString().split('T')[0]).not.toBe(todayStr)
-    // Should start from tomorrow
+    const todayLocal = new Date()
+    todayLocal.setHours(0, 0, 0, 0)
+    const firstLocal = new Date(days[0])
+    firstLocal.setHours(0, 0, 0, 0)
+    expect(firstLocal.getTime()).not.toBe(todayLocal.getTime())
+    // Should start from tomorrow (local)
     const tomorrow = new Date()
+    tomorrow.setHours(0, 0, 0, 0)
     tomorrow.setDate(tomorrow.getDate() + 1)
-    expect(days[0].toISOString().split('T')[0]).toBe(tomorrow.toISOString().split('T')[0])
+    expect(firstLocal.getTime()).toBe(tomorrow.getTime())
   })
 
   it('should compute slots excluding today when minNoticeDays is 1', () => {

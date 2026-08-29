@@ -1,4 +1,5 @@
 import React from 'react'
+import { Toaster } from 'react-hot-toast'
 import { Layout } from './components/common/Layout'
 import { Home } from './pages/Home'
 import { Health } from './pages/Health'
@@ -52,27 +53,51 @@ function App() {
   }, [data?.page?.icon_url])
 
   // Simple routing — no react-router needed for MVP
+  const toaster = <Toaster position="top-right" />
   if (path.startsWith('/health')) {
-    return <Health />
+    return (
+      <>
+        {toaster}
+        <Health />
+      </>
+    )
   }
   // Admin ships its own sticky toolbar — the public Nav would stack a second
   // sticky bar on top of it and expose #about/#calendar anchors that only exist
   // on the landing page.
   if (path.startsWith('/admin/clients')) {
-    return <AdminClients />
+    return (
+      <>
+        {toaster}
+        <AdminClients />
+      </>
+    )
   }
   if (path.startsWith('/admin')) {
-    return <Admin />
+    return (
+      <>
+        {toaster}
+        <Admin />
+      </>
+    )
   }
 
   if (path.startsWith('/client-portal')) {
-    return <ClientPortal />
+    return (
+      <>
+        {toaster}
+        <ClientPortal />
+      </>
+    )
   }
 
   return (
-    <Layout title={siteName}>
-      <Home />
-    </Layout>
+    <>
+      {toaster}
+      <Layout title={siteName}>
+        <Home />
+      </Layout>
+    </>
   )
 }
 
