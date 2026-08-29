@@ -252,22 +252,40 @@ export function Admin() {
               {quotaLoading ? 'Checking…' : quota ? `Storage ${formatStorage(quota.totalMB)} of ${formatStorage(quota.limitMB)}` : 'Check storage'}
             </button>
             <button onClick={() => { refetch(); content.refetch() }} className="px-3 min-h-11 inline-flex items-center bg-white border border-slate-500 rounded-full text-[11px] font-semibold hover:border-slate-900" aria-label="Reload content from the server" title="Reload content from the server">Refresh</button>
-            <a href="/admin/clients" className="px-3 min-h-11 inline-flex items-center bg-white border border-slate-500 rounded-full text-[11px] font-semibold hover:border-slate-900">Clients</a>
+            <a href="/admin/clients" className="px-3 min-h-11 inline-flex items-center bg-white border border-slate-500 rounded-full text-[11px] font-semibold hover:border-slate-900">Client Portal</a>
             <a href="/" className="px-3 min-h-11 inline-flex items-center bg-slate-900 text-white rounded-full text-[11px] font-semibold" aria-label="View site">View site</a>
           </div>
         </div>
         {globalError && <div className="max-w-5xl mx-auto px-6 pb-2"><div className="p-2 bg-red-50 border border-red-200 rounded-xl text-xs text-red-700" role="alert">{globalError}</div></div>}
         {content.error && <div className="max-w-5xl mx-auto px-6 pb-2"><div className="p-2 bg-red-50 border border-red-200 rounded-xl text-xs text-red-700">Content error: {content.error}</div></div>}
         {quota && (
-          <div className="max-w-5xl mx-auto px-6 pb-3">
+          <div className="max-w-5xl mx-auto px-6 pb-3 space-y-2">
             <div className="p-2.5 bg-white rounded-xl border text-[11px] flex flex-wrap gap-3 items-center">
-              <span>{quota.totalObjects} images stored</span>
+              <span>R2: {quota.totalObjects} images stored — {formatStorage(quota.totalMB)} of {formatStorage(quota.limitMB)} ({quota.percent.toFixed(1)}%)</span>
               <div className="w-24 h-1.5 bg-slate-200 rounded-full overflow-hidden" aria-label={`Storage ${quota.percent}% used`}>
                 <div className="h-full bg-slate-900" style={{ width: `${Math.min(100, quota.percent)}%` }} />
               </div>
               <span className={quota.warning ? 'text-red-600 font-semibold' : 'text-green-700'}>{quota.warning ? 'Almost full — remove some images' : 'Plenty of room'}</span>
-
             </div>
+            {quota.driveQuota && (
+              <div className="p-2.5 bg-white rounded-xl border text-[11px] flex flex-wrap gap-3 items-center">
+                {quota.driveQuota.error ? (
+                  <span className="text-slate-500">Drive: {quota.driveQuota.error}</span>
+                ) : quota.driveQuota.source === 'stub' ? (
+                  <span className="text-slate-500">Drive: not configured (whole account quota unavailable)</span>
+                ) : (
+                  <>
+                    <span>
+                      Drive: {(quota.driveQuota.usage / (1024*1024*1024)).toFixed(2)} GB
+                      {quota.driveQuota.limit ? ` of ${(quota.driveQuota.limit / (1024*1024*1024)).toFixed(1)} GB` : ''} (whole account — Drive + Gmail + Photos, 15 GB free)
+                      {quota.driveQuota.limit ? ` — ${((quota.driveQuota.usage / quota.driveQuota.limit)*100).toFixed(1)}%` : ''}
+                    </span>
+                    {quota.driveQuota.usageInDrive !== undefined && <span className="text-slate-600">In Drive: {(quota.driveQuota.usageInDrive/(1024*1024*1024)).toFixed(2)} GB</span>}
+                    {quota.driveQuota.usageInDriveTrash !== undefined && <span className="text-slate-500">Trash: {(quota.driveQuota.usageInDriveTrash/(1024*1024*1024)).toFixed(2)} GB</span>}
+                  </>
+                )}
+              </div>
+            )}
           </div>
         )}
       </div>

@@ -322,6 +322,16 @@ export async function updateAdminDriveFolderClientLevel(contact_id: string, fold
   })
 }
 
+export async function updateAdminClient(contact_id: string, fields: { first_name?: string; last_name?: string; phone?: string }, options: FetchOptions = {}): Promise<any> {
+  const { json } = await fetchJson(`/api/admin/clients/${encodeURIComponent(contact_id)}`, {
+    timeoutMs: (options as any).timeoutMs ?? 10000,
+    ...(options as any),
+    method: 'PATCH',
+    body: JSON.stringify(fields),
+  })
+  return json
+}
+
 export interface SendAdminEmailResult {
   success: boolean
   sentTo: string
@@ -392,6 +402,7 @@ export interface R2UsageResponse {
   guidance?: string
   objects?: { key: string; size: number; sizeKB?: number }[]
   error?: string
+  driveQuota?: { usage: number; limit?: number; usageInDrive?: number; usageInDriveTrash?: number; source: 'live' | 'stub'; error?: string } | null
 }
 
 export async function fetchR2Usage(checkQuota: boolean = false, options: FetchOptions = {}): Promise<R2UsageResponse> {

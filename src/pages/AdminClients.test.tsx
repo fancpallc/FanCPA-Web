@@ -11,6 +11,7 @@ vi.mock('../lib/api', () => ({
   sendAdminClientEmail: vi.fn(),
   createManualBooking: vi.fn(),
   deleteBooking: vi.fn(),
+  updateAdminClient: vi.fn(),
 }))
 
 vi.mock('../hooks/useAdminAuth', () => ({
@@ -50,10 +51,10 @@ test('AdminClients renders client card with Drive link at top and meetings table
     first_name: 'Jane',
     last_name: 'Doe',
     email: 'jane@example.com',
-    drive_folder_url: 'https://drive.google.com/drive/folders/abc123',
-    drive_folder_id: 'abc123',
+    drive_folder_url: 'https://drive.google.com/drive/folders/abc123def456',
+    drive_folder_id: 'abc123def456',
     drive_is_manual: 0,
-    year_folders: [{ year: 2026, folder_url: 'https://drive.google.com/drive/folders/2026', folder_id: 'id2026' }],
+    year_folders: [{ year: 2026, folder_url: 'https://drive.google.com/drive/folders/2026valid123', folder_id: 'id2026valid123' }],
     meetings: [
       {
         contact_id: 'c1',
@@ -75,7 +76,9 @@ test('AdminClients renders client card with Drive link at top and meetings table
   await waitFor(() => {
     // Email appears once in header but we have desktop+mobile duplicate meeting rows — use getAllByText
     expect(screen.getAllByText(/jane@example.com/i).length).toBeGreaterThanOrEqual(1)
-    expect(screen.getByDisplayValue('https://drive.google.com/drive/folders/abc123')).toBeInTheDocument()
+    // R8a/R9: Drive link now renders as hyperlink in read mode, not an input — check link exists
+    const links = screen.getAllByRole('link')
+    expect(links.some((l) => (l as HTMLAnchorElement).href.includes('abc123def456'))).toBe(true)
     // Tax appears in both desktop and mobile — at least one
     expect(screen.getAllByText('Tax').length).toBeGreaterThanOrEqual(1)
   })
@@ -92,8 +95,8 @@ test('AdminClients select-all selects only upcoming confirmed, past meetings dis
     first_name: 'Jane',
     last_name: 'Doe',
     email: 'jane@example.com',
-    drive_folder_url: 'https://drive.google.com/drive/folders/abc123',
-    drive_folder_id: 'abc123',
+    drive_folder_url: 'https://drive.google.com/drive/folders/abc123def456',
+    drive_folder_id: 'abc123def456',
     drive_is_manual: 0,
     year_folders: [],
     meetings: [
@@ -107,8 +110,9 @@ test('AdminClients select-all selects only upcoming confirmed, past meetings dis
   fireEvent.click(screen.getByRole('button', { name: /^search$/i }))
 
   await waitFor(() => {
-    expect(screen.getByText('Past')).toBeInTheDocument()
-    expect(screen.getByText('Future')).toBeInTheDocument()
+    // Purpose now appears twice (desktop table + mobile cards) after R8 refactor, so use getAllByText
+    expect(screen.getAllByText('Past').length).toBeGreaterThanOrEqual(1)
+    expect(screen.getAllByText('Future').length).toBeGreaterThanOrEqual(1)
   })
 
   // Past checkbox should be disabled — prevents backend 400 that send-email.test verifies

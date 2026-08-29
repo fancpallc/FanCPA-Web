@@ -69,6 +69,10 @@ export async function onRequestPost({ request, env }: { request: Request; env: a
     })
   }
 
+  if (purpose && String(purpose).length > 2000) {
+    return new Response(JSON.stringify({ error: 'Purpose too long (max 2000 chars)' }), { status: 400, headers: { 'Content-Type': 'application/json' } })
+  }
+
   const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/
   if (!emailRegex.test(email.trim())) {
     return new Response(JSON.stringify({ error: 'Invalid email' }), { status: 400, headers: { 'Content-Type': 'application/json' } })
@@ -210,6 +214,7 @@ export async function onRequestPost({ request, env }: { request: Request; env: a
       slot: { date: slot_start.split('T')[0], start: slot_start, end: slot_end },
       cancelToken,
       siteUrl: env?.SITE_URL,
+      timeZone: browserTz,
     })
     // C1: confirm/[token].ts:148 already does this — expectedLive && source stub → 502
     if (expectedLive && calResult?.source === 'stub') {

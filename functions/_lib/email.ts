@@ -97,7 +97,7 @@ export function buildConfirmationEmail(params: {
       <p><strong>Email:</strong> ${escapeHtml(email)}</p>
       ${meetLink ? `<p>Meet link: <a href="${meetLink}">${escapeHtml(meetLink)}</a></p>` : ''}
       ${driveUrl ? `<p>Drive folder${driveYear ? ` (${driveYear})` : ''}: <a href="${driveUrl}">${escapeHtml(driveUrl)}</a></p>` : ''}
-      ${cancelUrl ? `<p>Cancel link: <a href="${cancelUrl}">${escapeHtml(cancelUrl)}</a></p>` : ''}
+      ${cancelUrl ? `<p>Cancel link (cancel 24 hours prior): <a href="${cancelUrl}">${escapeHtml(cancelUrl)}</a></p>` : ''}
       <p>Google Calendar invite also sent with Meet join button + description containing Meet link. Purpose included in invite.</p>
       <p>Thanks!</p>
     </div>
@@ -244,12 +244,15 @@ export async function sendConfirmationEmail(params: SendEmailParams): Promise<Se
 
 export function buildClientPortalDriveEmail(params: {
   firstName: string
+  lastName?: string
+  email?: string
+  phone?: string
   driveFolderUrl?: string
   yearFolders?: { year: number; url: string }[]
   driveLinks?: { year: number; url: string }[] // legacy backward compat
   meetings?: EmailMeeting[]
 }): string {
-  const { firstName } = params
+  const { firstName, lastName, email, phone } = params as any
   const driveFolderUrl = (params as any).driveFolderUrl
   const yearFolders = params.yearFolders || params.driveLinks || []
   const meetings = params.meetings || []
@@ -267,10 +270,17 @@ export function buildClientPortalDriveEmail(params: {
     ? `<h3>Your upcoming meetings</h3>${renderMeetingRows(meetings)}`
     : '<p style="color:#64748b;">No upcoming meetings.</p>'
 
+  const fullName = [firstName, lastName].filter(Boolean).join(' ')
+  const contactDetails = [
+    email ? `Email: ${escapeHtml(email)}` : '',
+    phone ? `Phone: ${escapeHtml(phone)}` : '',
+  ].filter(Boolean).join(' · ')
+
   return `
     <div style="font-family: sans-serif; max-width: 600px; margin: 0 auto;">
       <h2>Your Client Portal</h2>
       <p>Hi ${escapeHtml(firstName)},</p>
+      ${fullName ? `<p><strong>${escapeHtml(fullName)}</strong>${contactDetails ? ` · ${contactDetails}` : ''}</p>` : contactDetails ? `<p>${contactDetails}</p>` : ''}
       ${folderSection}
       ${yearSection}
       ${meetingsSection}
@@ -326,13 +336,16 @@ function resendKey(env: EmailEnv): string | undefined {
 export async function sendClientPortalDriveEmail(params: {
   to: string
   firstName: string
+  lastName?: string
+  email?: string
+  phone?: string
   driveFolderUrl?: string
   yearFolders?: { year: number; url: string }[]
   driveLinks?: { year: number; url: string }[] // legacy compat
   meetings?: EmailMeeting[]
   env: EmailEnv
 }): Promise<SendEmailResult> {
-  const { to, firstName, env } = params
+  const { to, firstName, lastName, email, phone, env } = params as any
   const driveFolderUrl = (params as any).driveFolderUrl
   const yearFolders = params.yearFolders || params.driveLinks || []
   const meetings = params.meetings || []
@@ -346,7 +359,7 @@ export async function sendClientPortalDriveEmail(params: {
 
   try {
     const subject = 'Your Client Portal — documents & meetings'
-    const html = buildClientPortalDriveEmail({ firstName, driveFolderUrl, yearFolders, meetings })
+    const html = buildClientPortalDriveEmail({ firstName, lastName, email, phone, driveFolderUrl, yearFolders, meetings })
     const res = await fetch('https://api.resend.com/emails', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${apiKey}` },

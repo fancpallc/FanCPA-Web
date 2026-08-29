@@ -138,6 +138,7 @@ export const onRequestGet: PagesFunction<Env> = async ({ params, env, request })
       slot: { date: pending.slot_date, start: pending.slot_start, end: pending.slot_end },
       cancelToken,
       siteUrl,
+      timeZone: pending.time_zone || undefined,
     })
 
     console.log(`!!! CONFIRM_GCAL_RESULT source=${source} eventId=${calendarEventId} meetLink=${meetLink} error=${gcalError || 'none'}`)
@@ -328,8 +329,9 @@ export const onRequestGet: PagesFunction<Env> = async ({ params, env, request })
         <p style="margin-top:12px;color:#475569;line-height:1.6;">Hi ${pending.first_name}, your meeting for <strong>${dateTimeEt}</strong> is confirmed.</p>
         ${pending.purpose ? `<div style="margin-top:12px;background:white;padding:12px;border-radius:8px;border:1px solid #e2e8f0;"><strong>Purpose:</strong> ${pending.purpose}</div>` : ''}
         <p style="margin-top:12px;">Meet: <a href="${meetLink}" target="_blank" rel="noopener noreferrer" style="color:#0f172a; text-decoration:underline;">${meetLink || 'No Meet link (bare event — group calendar may not support Meet via SA, but slot blocked)'}</a></p>
+        ${driveLink && String(driveLink).startsWith('https://') ? `<p style="margin-top:12px;padding:12px;background:white;border:1px solid #e2e8f0;border-radius:8px;">Upload your documents for ${meetingYear} here: <a href="${driveLink}" target="_blank" rel="noopener noreferrer" style="color:#0f172a;text-decoration:underline;font-weight:600;">${driveLink}</a><br/><span style="font-size:12px;color:#64748b;">Anything you add to this folder is visible to us before the meeting.</span></p>` : ''}
         ${gcalError ? `<div style="margin-top:8px;padding:8px;background:#fef3c7;border:1px solid #fcd34d;border-radius:8px;font-size:12px;">Note: ${gcalError}</div>` : ''}
-        <p style="margin-top:8px;font-size:13px;color:#64748b;">Cancel anytime: <a href="${cancelUrl}" style="color:#dc2626; text-decoration:underline;">${cancelUrl}</a></p>
+        <p style="margin-top:8px;font-size:13px;color:#64748b;">Cancel 24 hours prior: <a href="${cancelUrl}" style="color:#dc2626; text-decoration:underline;">${cancelUrl}</a></p>
         <div style="margin-top:24px;display:flex;gap:12px;flex-wrap:wrap;">
           <a href="${meetLink}" target="_blank" style="padding:12px 24px;background:#0f172a;color:white;border-radius:999px;text-decoration:none;font-weight:600;font-size:14px;">Open Meet →</a>
           <a href="/" style="padding:12px 24px;background:white;border:1px solid #e2e8f0;border-radius:999px;text-decoration:none;color:#0f172a;font-weight:600;font-size:14px;">Back to home</a>

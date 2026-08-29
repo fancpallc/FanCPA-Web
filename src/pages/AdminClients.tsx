@@ -6,6 +6,7 @@ import {
   sendAdminClientEmail,
   createManualBooking,
   deleteBooking,
+  updateAdminClient,
   AdminClientCard,
   AdminClientRow,
 } from '../lib/api'
@@ -26,11 +27,16 @@ function isValidDriveFolderUrl(url: string): boolean {
   if (!url) return false
   const trimmed = url.trim()
   if (!trimmed.includes('/drive/folders/')) return false
+  if (!trimmed.startsWith('https://')) return false
   try {
     const u = new URL(trimmed)
     if (u.protocol !== 'https:') return false
     const m = /\/folders\/([A-Za-z0-9-_]+)/.exec(trimmed)
-    return !!m && !!m[1] && m[1].length >= 10
+    if (!m || !m[1] || m[1].length < 10) return false
+    // R9 guard: never hyperlink stub rows persisted in dev (fake-/stub-/missing-)
+    const id = m[1].toLowerCase()
+    if (id.startsWith('fake-') || id.startsWith('stub-') || id.startsWith('missing-')) return false
+    return true
   } catch {
     return false
   }
@@ -82,8 +88,13 @@ export default function AdminClients() {
   const [driveErrors, setDriveErrors] = useState<Record<string, string>>({})
   const [savingDrive, setSavingDrive] = useState<Record<string, boolean>>({})
   const [sendingEmail, setSendingEmail] = useState<Record<string, boolean>>({})
+  const [driveEditMode, setDriveEditMode] = useState<Record<string, boolean>>({})
+  const [clientEditMode, setClientEditMode] = useState<Record<string, boolean>>({})
+  const [editingClient, setEditingClient] = useState<Record<string, { first_name: string; last_name: string; phone: string }>>({})
+  const [savingClient, setSavingClient] = useState<Record<string, boolean>>({})
 
   const [selected, setSelected] = useState<Record<string, Set<string>>>({})
+  const [expandedPurpose, setExpandedPurpose] = useState<Record<string, boolean>>({})
 
   const [showAddModal, setShowAddModal] = useState(false)
   const [newBooking, setNewBooking] = useState({
@@ -317,8 +328,36 @@ export default function AdminClients() {
         prev.map((c) => (c.contact_id === contact_id ? { ...c, drive_folder_url: url, drive_is_manual: 1 } : c))
       )
       setDriveErrors((prev) => ({ ...prev, [contact_id]: '' }))
-      // Clear editing state after successful save — unsaved marker disappears (Tier3)
+      // Clear editing state after successful save — unsaved marker disappears (Tier3) + exit edit mode (R8a/R8b)
       setEditingDrive((prev) => {
+        const next = { ...prev }
+        delete next[contact_id]
+        return next
+      })
+      setDriveEditMode((prev) => ({ ...prev, [contact_id]: false }))
+    } catch (err: any) {
+      toast.error(mapError(err))
+    } finally {
+      setSavingDrive((prev) => ({ ...prev, [contact_id]: false }))
+    }
+  }
+
+  const handleSaveClientEdit = async (contact_id: string) => {
+    const draft = editingClient[contact_id]
+    if (!draft) return
+    const first = draft.first_name.trim()
+    const last = draft.last_name.trim()
+    if (!first || !last) {
+      toast.error('First and last name required')
+      return
+    }
+    setSavingClient((prev) => ({ ...prev, [contact_id]: true }))
+    try {
+      const res = await updateAdminClient(contact_id, { first_name: first, last_name: last, phone: draft.phone.trim() })
+      toast.success('Client updated')
+      setClients((prev) => prev.map((c) => (c.contact_id === contact_id ? { ...c, first_name: first, last_name: last, phone: draft.phone.trim() || undefined, meetings: c.meetings.map((m) => ({ ...m, first_name: first, last_name: last, phone: draft.phone.trim() || m.phone })) } : c)))
+      setClientEditMode((prev) => ({ ...prev, [contact_id]: false }))
+      setEditingClient((prev) => {
         const next = { ...prev }
         delete next[contact_id]
         return next
@@ -326,7 +365,7 @@ export default function AdminClients() {
     } catch (err: any) {
       toast.error(mapError(err))
     } finally {
-      setSavingDrive((prev) => ({ ...prev, [contact_id]: false }))
+      setSavingClient((prev) => ({ ...prev, [contact_id]: false }))
     }
   }
 
@@ -382,6 +421,20 @@ export default function AdminClients() {
       toast.error(mapError(err))
     } finally {
       setSendingEmail((prev) => ({ ...prev, [client.contact_id]: false }))
+    }
+  }
+
+  const handleSendSingle = async (client: AdminClientCard, bookingId: string) => {
+    setSendingEmail((prev) => ({ ...prev, [client.contact_id]: true, [`${client.contact_id}:${bookingId}`]: true } as any))
+    try {
+      const res = await sendAdminClientEmail(client.contact_id, [bookingId])
+      const row = client.meetings.find((m) => m.booking_id === bookingId)
+      const when = row?.slot_start ? formatNiceDateTime(row.slot_start) : `${res.meetingsCount} meetings`
+      toast.success(`Email sent to ${client.first_name} ${client.last_name} — ${when}`)
+    } catch (err: any) {
+      toast.error(mapError(err))
+    } finally {
+      setSendingEmail((prev) => ({ ...prev, [client.contact_id]: false, [`${client.contact_id}:${bookingId}`]: false } as any))
     }
   }
 
@@ -661,7 +714,7 @@ export default function AdminClients() {
             </p>
             <label className="flex items-center gap-2 mb-2 text-sm">
               <input type="checkbox" checked={cancelMeetingChecked} onChange={(e) => setCancelMeetingChecked(e.target.checked)} />
-              Also cancel meeting and free calendar?
+              Cancel meeting and free calendar?
             </label>
             <label className="flex items-center gap-2 mb-4 text-sm">
               <input type="checkbox" checked={notifyClientChecked} onChange={(e) => setNotifyClientChecked(e.target.checked)} />
@@ -669,7 +722,7 @@ export default function AdminClients() {
             </label>
             <div className="flex justify-end gap-2">
               <button ref={deleteCancelRef} type="button" onClick={() => setDeleteTarget(null)} className="px-4 py-2 rounded-full border text-sm min-h-11">
-                Cancel
+                Keep booking
               </button>
               <button type="button" onClick={handleDeleteBooking} disabled={deleteLoading} className="bg-red-600 text-white px-4 py-2 rounded-full text-sm min-h-11 disabled:opacity-50">
                 {deleteLoading ? 'Deleting…' : 'Delete'}
@@ -756,19 +809,41 @@ export default function AdminClients() {
                 <div key={client.contact_id} className="border rounded-2xl overflow-hidden bg-white">
                   <div className="p-4 bg-slate-50 border-b flex flex-wrap justify-between gap-3">
                     <div className="min-w-0 flex-1">
-                      <div className="font-semibold truncate">
-                        {client.first_name} {client.last_name} · <span className="break-all">{client.email}</span>
-                        {client.phone ? ` · ${client.phone}` : ''}
-                      </div>
-                      {client.year_folders.length > 0 && (
-                        <div className="text-xs text-slate-500 mt-1">
-                          Year folders:{' '}
-                          {client.year_folders.map((y) => (
-                            <a key={`${y.year}-${y.folder_id}`} href={y.folder_url} target="_blank" rel="noopener noreferrer" className="text-blue-600 underline mr-2">
-                              {y.year} ↗
-                            </a>
-                          ))}
+                      {clientEditMode[client.contact_id] ? (
+                        <div className="flex flex-wrap gap-2 items-end">
+                          <div className="flex flex-col">
+                            <label className="text-[10px] text-slate-500">First name</label>
+                            <input value={editingClient[client.contact_id]?.first_name ?? client.first_name} onChange={(e) => setEditingClient((prev) => ({ ...prev, [client.contact_id]: { ...(prev[client.contact_id] || { first_name: client.first_name, last_name: client.last_name, phone: client.phone || '' }), first_name: e.target.value } }))} className="border p-1.5 rounded text-sm w-[120px]" />
+                          </div>
+                          <div className="flex flex-col">
+                            <label className="text-[10px] text-slate-500">Last name</label>
+                            <input value={editingClient[client.contact_id]?.last_name ?? client.last_name} onChange={(e) => setEditingClient((prev) => ({ ...prev, [client.contact_id]: { ...(prev[client.contact_id] || { first_name: client.first_name, last_name: client.last_name, phone: client.phone || '' }), last_name: e.target.value } }))} className="border p-1.5 rounded text-sm w-[120px]" />
+                          </div>
+                          <div className="flex flex-col">
+                            <label className="text-[10px] text-slate-500">Phone</label>
+                            <input value={editingClient[client.contact_id]?.phone ?? client.phone ?? ''} onChange={(e) => setEditingClient((prev) => ({ ...prev, [client.contact_id]: { ...(prev[client.contact_id] || { first_name: client.first_name, last_name: client.last_name, phone: client.phone || '' }), phone: e.target.value } }))} className="border p-1.5 rounded text-sm w-[140px]" placeholder="Phone" />
+                          </div>
+                          <button type="button" onClick={() => handleSaveClientEdit(client.contact_id)} disabled={!!savingClient[client.contact_id]} className="bg-blue-600 text-white px-3 py-1.5 rounded-full text-xs font-semibold min-h-8 disabled:opacity-50">{savingClient[client.contact_id] ? 'Saving…' : 'Save'}</button>
+                          <button type="button" onClick={() => { setClientEditMode((prev) => ({ ...prev, [client.contact_id]: false })); setEditingClient((prev) => { const n = { ...prev }; delete n[client.contact_id]; return n }) }} className="border px-3 py-1.5 rounded-full text-xs min-h-8">Cancel</button>
+                          <div className="w-full text-[11px] text-slate-500">Email is the Drive folder name and cannot be edited here — {client.email}</div>
                         </div>
+                      ) : (
+                        <>
+                          <div className="font-semibold truncate flex items-center gap-2">
+                            <span>{client.first_name} {client.last_name} · <span className="break-all">{client.email}</span>{client.phone ? ` · ${client.phone}` : ''}</span>
+                            <button type="button" onClick={() => { setClientEditMode((prev) => ({ ...prev, [client.contact_id]: true })); setEditingClient((prev) => ({ ...prev, [client.contact_id]: { first_name: client.first_name, last_name: client.last_name, phone: client.phone || '' } })) }} className="text-xs text-blue-600 underline ml-2" aria-label={`Edit ${client.email}`}>Edit</button>
+                          </div>
+                          {client.year_folders.length > 0 && (
+                            <div className="text-xs text-slate-500 mt-1">
+                              Year folders:{' '}
+                              {client.year_folders.map((y) => (
+                                <a key={`${y.year}-${y.folder_id}`} href={y.folder_url} target="_blank" rel="noopener noreferrer" className="text-blue-600 underline mr-2">
+                                  {y.year} ↗
+                                </a>
+                              ))}
+                            </div>
+                          )}
+                        </>
                       )}
                     </div>
                     <div className="flex flex-col items-end gap-1">
@@ -790,52 +865,76 @@ export default function AdminClients() {
                       )}
                     </div>
                   </div>
-                  <div className="p-3 flex flex-wrap gap-2 items-start border-b bg-white">
-                    <label htmlFor={`drive-${client.contact_id}`} className="text-xs font-medium text-slate-600 mt-2">
-                      GDrive:
-                    </label>
-                    <div className="flex-1 min-w-[280px]">
-                      <div className="flex gap-1">
-                        <input
-                          id={`drive-${client.contact_id}`}
-                          value={editingDrive[client.contact_id] !== undefined ? editingDrive[client.contact_id] : client.drive_folder_url || ''}
-                          onChange={(e) => setEditingDrive({ ...editingDrive, [client.contact_id]: e.target.value })}
-                          onBlur={(e) => validateDriveLink(client.contact_id, e.target.value)}
-                          placeholder="https://drive.google.com/drive/folders/..."
-                          className={`border p-2 rounded text-sm w-full ${driveErrors[client.contact_id] ? 'border-red-400' : ''} ${isUnsaved ? 'bg-amber-50' : ''}`}
-                          aria-label={`Drive folder URL for ${client.email}`}
-                          aria-describedby={driveErrors[client.contact_id] ? `drive-err-${client.contact_id}` : undefined}
-                        />
-                        {currentDrive && (
-                          <button
-                            type="button"
-                            onClick={() => copyToClipboard(editingDrive[client.contact_id] ?? currentDrive)}
-                            aria-label={`Copy Drive link for ${client.email}`}
-                            className="text-slate-600 border px-2 py-2 rounded text-xs min-h-11"
-                            title="Copy Drive link"
-                          >
-                            Copy
-                          </button>
-                        )}
+                  {(() => {
+                    const isEdit = !!driveEditMode[client.contact_id]
+                    const hasValidLink = currentDrive && isValidDriveFolderUrl(currentDrive)
+                    const displayUrl = editingDrive[client.contact_id] !== undefined ? editingDrive[client.contact_id] : currentDrive
+                    const handleEnterEdit = () => {
+                      setDriveEditMode((prev) => ({ ...prev, [client.contact_id]: true }))
+                      setEditingDrive((prev) => ({ ...prev, [client.contact_id]: currentDrive }))
+                    }
+                    const handleCancelEdit = () => {
+                      setDriveEditMode((prev) => ({ ...prev, [client.contact_id]: false }))
+                      setEditingDrive((prev) => {
+                        const next = { ...prev }
+                        delete next[client.contact_id]
+                        return next
+                      })
+                      setDriveErrors((prev) => ({ ...prev, [client.contact_id]: '' }))
+                    }
+                    if (!isEdit) {
+                      return (
+                        <div className="p-3 flex flex-wrap gap-2 items-center border-b bg-white">
+                          <span className="text-xs font-medium text-slate-600">GDrive:</span>
+                          {hasValidLink ? (
+                            <a href={currentDrive} target="_blank" rel="noopener noreferrer" className="text-sm text-blue-600 underline truncate max-w-[360px]" title={currentDrive}>
+                              {currentDrive}
+                            </a>
+                          ) : currentDrive ? (
+                            <span className="text-sm text-slate-500 truncate max-w-[360px]" title={currentDrive}>{currentDrive} (invalid)</span>
+                          ) : (
+                            <span className="text-sm text-slate-500">No Drive link</span>
+                          )}
+                          <div className="flex gap-1 items-center ml-2">
+                            {hasValidLink && (
+                              <button type="button" onClick={() => copyToClipboard(currentDrive)} aria-label={`Copy Drive link for ${client.email}`} className="text-slate-600 border px-2 py-1.5 rounded text-xs min-h-8" title="Copy Drive link">Copy</button>
+                            )}
+                            <button type="button" onClick={handleEnterEdit} aria-label={hasValidLink ? `Edit Drive link for ${client.email}` : `Add Drive link for ${client.email}`} className="text-white bg-blue-600 px-3 py-1.5 rounded-full text-xs font-semibold min-h-8">
+                              {hasValidLink ? 'Edit' : '+ Add Drive link'}
+                            </button>
+                          </div>
+                          {client.drive_is_manual ? <span className="text-[10px] bg-amber-100 border border-amber-300 rounded-full px-2 py-0.5">✎ manual</span> : null}
+                        </div>
+                      )
+                    }
+                    return (
+                      <div className="p-3 flex flex-wrap gap-2 items-start border-b bg-white">
+                        <label htmlFor={`drive-${client.contact_id}`} className="text-xs font-medium text-slate-600 mt-2">GDrive:</label>
+                        <div className="flex-1 min-w-[280px]">
+                          <div className="flex gap-1">
+                            <input
+                              id={`drive-${client.contact_id}`}
+                              value={displayUrl || ''}
+                              onChange={(e) => setEditingDrive({ ...editingDrive, [client.contact_id]: e.target.value })}
+                              onBlur={(e) => validateDriveLink(client.contact_id, e.target.value)}
+                              placeholder="https://drive.google.com/drive/folders/..."
+                              className={`border p-2 rounded text-sm w-full ${driveErrors[client.contact_id] ? 'border-red-400' : ''} ${isUnsaved ? 'bg-amber-50' : ''}`}
+                              aria-label={`Drive folder URL for ${client.email}`}
+                              aria-describedby={driveErrors[client.contact_id] ? `drive-err-${client.contact_id}` : undefined}
+                            />
+                            {currentDrive && (
+                              <button type="button" onClick={() => copyToClipboard(editingDrive[client.contact_id] ?? currentDrive)} aria-label={`Copy Drive link for ${client.email}`} className="text-slate-600 border px-2 py-2 rounded text-xs min-h-11" title="Copy Drive link">Copy</button>
+                            )}
+                          </div>
+                          {driveErrors[client.contact_id] && <p id={`drive-err-${client.contact_id}`} className="text-xs text-red-600 mt-1">{driveErrors[client.contact_id]}</p>}
+                          {isUnsaved && !driveErrors[client.contact_id] && <p className="text-[11px] text-amber-700 mt-1">Unsaved changes</p>}
+                        </div>
+                        <button type="button" onClick={() => handleSaveDriveLink(client.contact_id)} disabled={isSaving} aria-label={`Save Drive link for ${client.email}`} className="text-white bg-blue-600 px-4 py-2 rounded-full text-xs font-semibold min-h-11 disabled:opacity-50 mt-0.5">{isSaving ? 'Saving…' : 'Save'}</button>
+                        <button type="button" onClick={handleCancelEdit} className="border px-4 py-2 rounded-full text-xs min-h-11 mt-0.5">Cancel</button>
+                        {client.drive_is_manual ? <span className="text-[10px] bg-amber-100 border border-amber-300 rounded-full px-2 py-0.5 mt-2">✎ manual</span> : null}
                       </div>
-                      {driveErrors[client.contact_id] && (
-                        <p id={`drive-err-${client.contact_id}`} className="text-xs text-red-600 mt-1">{driveErrors[client.contact_id]}</p>
-                      )}
-                      {isUnsaved && !driveErrors[client.contact_id] && (
-                        <p className="text-[11px] text-amber-700 mt-1">Unsaved changes</p>
-                      )}
-                    </div>
-                    <button
-                      type="button"
-                      onClick={() => handleSaveDriveLink(client.contact_id)}
-                      disabled={isSaving}
-                      aria-label={`Save Drive link for ${client.email}`}
-                      className="text-white bg-blue-600 px-4 py-2 rounded-full text-xs font-semibold min-h-11 disabled:opacity-50 mt-0.5"
-                    >
-                      {isSaving ? 'Saving…' : 'Save'}
-                    </button>
-                    {client.drive_is_manual ? <span className="text-[10px] bg-amber-100 border border-amber-300 rounded-full px-2 py-0.5 mt-2">✎ manual</span> : null}
-                  </div>
+                    )
+                  })()}
 
                   {client.meetings.length === 0 ? (
                     <p className="text-sm text-slate-500 p-4">No meetings in the selected range.</p>
@@ -885,7 +984,23 @@ export default function AdminClients() {
                                     ) : null}
                                   </td>
                                   <td className="p-2 whitespace-nowrap">{r.slot_start ? new Date(r.slot_start).toLocaleString() : '-'}</td>
-                                  <td className="p-2">{r.purpose || ''}</td>
+                                  <td className="p-2">
+                                    {(() => {
+                                      const p = r.purpose || ''
+                                      if (!p) return <span className="text-slate-400">—</span>
+                                      const id = r.booking_id || `${r.contact_id}-${r.slot_start}`
+                                      const expanded = !!expandedPurpose[id]
+                                      const needsClamp = p.length > 100
+                                      return (
+                                        <div className="max-w-[280px]">
+                                          <span title={p}>{needsClamp && !expanded ? p.slice(0, 100) + '…' : p}</span>
+                                          {needsClamp && (
+                                            <button type="button" onClick={() => setExpandedPurpose((prev) => ({ ...prev, [id]: !prev[id] }))} className="ml-1 text-xs text-blue-600 underline">{expanded ? 'Show less' : 'Show more'}</button>
+                                          )}
+                                        </div>
+                                      )
+                                    })()}
+                                  </td>
                                   <td className="p-2">{r.time_zone || ''}</td>
                                   <td className="p-2 text-xs truncate max-w-[140px]">
                                     {r.meet_link ? (
@@ -898,22 +1013,37 @@ export default function AdminClients() {
                                   </td>
                                   <td className="p-2 text-xs">{r.status || ''}</td>
                                   <td className="p-2">
-                                    {r.booking_id && (
-                                      <button
-                                        type="button"
-                                        onClick={(e) => {
-                                          lastTriggerRef.current = e.currentTarget as HTMLElement
-                                          lastTriggerRef.current.dataset.trigger = `delete-${r.booking_id}`
-                                          setDeleteTarget({ client, meeting: r })
-                                          setCancelMeetingChecked(true)
-                                          setNotifyClientChecked(false)
-                                        }}
-                                        aria-label={`Delete booking for ${client.email} at ${r.slot_start}`}
-                                        className="bg-red-600 text-white px-3 py-2 rounded-full text-xs min-h-11"
-                                      >
-                                        Delete
-                                      </button>
-                                    )}
+                                    <div className="flex items-center gap-1">
+                                      {r.booking_id && canSelect && (
+                                        <button
+                                          type="button"
+                                          onClick={() => handleSendSingle(client, r.booking_id!)}
+                                          aria-label={`Send meeting at ${r.slot_start} to ${client.email}`}
+                                          title="Send this meeting"
+                                          className="w-8 h-8 inline-flex items-center justify-center bg-white border border-slate-300 rounded-full hover:bg-slate-50 disabled:opacity-40"
+                                          disabled={!!sendingEmail[client.contact_id]}
+                                        >
+                                          <svg xmlns="http://www.w3.org/2000/svg" className="w-4 h-4" viewBox="0 0 20 20" fill="currentColor" aria-hidden="true"><path d="M2.003 5.884L10 9.882l7.997-3.998A2 2 0 0016 4H4a2 2 0 00-1.997 1.884z" /><path d="M18 8.118l-8 4-8-4V14a2 2 0 002 2h12a2 2 0 002-2V8.118z" /></svg>
+                                        </button>
+                                      )}
+                                      {r.booking_id && (
+                                        <button
+                                          type="button"
+                                          onClick={(e) => {
+                                            lastTriggerRef.current = e.currentTarget as HTMLElement
+                                            lastTriggerRef.current.dataset.trigger = `delete-${r.booking_id}`
+                                            setDeleteTarget({ client, meeting: r })
+                                            setCancelMeetingChecked(true)
+                                            setNotifyClientChecked(false)
+                                          }}
+                                          aria-label={`Delete booking for ${client.email} at ${r.slot_start}`}
+                                          title="Delete booking"
+                                          className="w-8 h-8 inline-flex items-center justify-center bg-red-600 text-white rounded-full text-xs hover:bg-red-700"
+                                        >
+                                          <svg xmlns="http://www.w3.org/2000/svg" className="w-4 h-4" viewBox="0 0 20 20" fill="currentColor" aria-hidden="true"><path fillRule="evenodd" d="M9 2a1 1 0 00-.894.553L7.382 4H4a1 1 0 000 2v10a2 2 0 002 2h8a2 2 0 002-2V6a1 1 0 100-2h-3.382l-.724-1.447A1 1 0 0011 2H9zM7 8a1 1 0 012 0v6a1 1 0 11-2 0V8zm5-1a1 1 0 00-1 1v6a1 1 0 102 0V8a1 1 0 00-1-1z" clipRule="evenodd" /></svg>
+                                        </button>
+                                      )}
+                                    </div>
                                   </td>
                                 </tr>
                               );
@@ -940,24 +1070,53 @@ export default function AdminClients() {
                               ) : null}
                               <div className="flex-1 min-w-0">
                                 <div className="font-medium text-sm">{r.slot_start ? new Date(r.slot_start).toLocaleString() : '-'}</div>
-                                <div className="text-xs text-slate-500">{r.purpose || 'No purpose'} · {r.time_zone || 'N/A'} · {r.status || ''}</div>
+                                <div className="text-xs text-slate-500">
+                                  {(() => {
+                                    const p = r.purpose || 'No purpose'
+                                    const id = (r.booking_id || `${r.contact_id}-${r.slot_start}`) + '-m'
+                                    const expanded = !!expandedPurpose[id]
+                                    const needsClamp = p.length > 80
+                                    return (
+                                      <>
+                                        <span title={p}>{needsClamp && !expanded ? p.slice(0, 80) + '…' : p}</span>
+                                        {needsClamp && <button type="button" onClick={() => setExpandedPurpose((prev) => ({ ...prev, [id]: !prev[id] }))} className="ml-1 text-blue-600 underline">{expanded ? 'less' : 'more'}</button>}
+                                        {' · '}{r.time_zone || 'N/A'} · {r.status || ''}
+                                      </>
+                                    )
+                                  })()}
+                                </div>
                                 {r.meet_link && <a href={r.meet_link} target="_blank" rel="noopener noreferrer" className="text-xs text-blue-600 underline break-all">{r.meet_link}</a>}
                                 {!canSelect && <div className="text-[11px] text-slate-500 mt-1">Past meeting — cannot be forwarded</div>}
-                                {r.booking_id && (
-                                  <button
-                                    type="button"
-                                    onClick={(e) => {
-                                      lastTriggerRef.current = e.currentTarget as HTMLElement
-                                      lastTriggerRef.current.dataset.trigger = `delete-${r.booking_id}-mobile`
-                                      setDeleteTarget({ client, meeting: r })
-                                      setCancelMeetingChecked(true)
-                                      setNotifyClientChecked(false)
-                                    }}
-                                    className="mt-2 bg-red-600 text-white px-3 py-2 rounded-full text-xs min-h-11"
-                                  >
-                                    Delete
-                                  </button>
-                                )}
+                                <div className="mt-2 flex gap-2">
+                                  {r.booking_id && canSelect && (
+                                    <button
+                                      type="button"
+                                      onClick={() => handleSendSingle(client, r.booking_id!)}
+                                      aria-label={`Send meeting at ${r.slot_start} to ${client.email}`}
+                                      title="Send this meeting"
+                                      className="w-8 h-8 inline-flex items-center justify-center bg-white border rounded-full"
+                                    >
+                                      <svg xmlns="http://www.w3.org/2000/svg" className="w-4 h-4" viewBox="0 0 20 20" fill="currentColor" aria-hidden="true"><path d="M2.003 5.884L10 9.882l7.997-3.998A2 2 0 0016 4H4a2 2 0 00-1.997 1.884z" /><path d="M18 8.118l-8 4-8-4V14a2 2 0 002 2h12a2 2 0 002-2V8.118z" /></svg>
+                                    </button>
+                                  )}
+                                  {r.booking_id && (
+                                    <button
+                                      type="button"
+                                      onClick={(e) => {
+                                        lastTriggerRef.current = e.currentTarget as HTMLElement
+                                        lastTriggerRef.current.dataset.trigger = `delete-${r.booking_id}-mobile`
+                                        setDeleteTarget({ client, meeting: r })
+                                        setCancelMeetingChecked(true)
+                                        setNotifyClientChecked(false)
+                                      }}
+                                      aria-label={`Delete booking for ${client.email} at ${r.slot_start}`}
+                                      title="Delete booking"
+                                      className="w-8 h-8 inline-flex items-center justify-center bg-red-600 text-white rounded-full text-xs"
+                                    >
+                                      <svg xmlns="http://www.w3.org/2000/svg" className="w-4 h-4" viewBox="0 0 20 20" fill="currentColor" aria-hidden="true"><path fillRule="evenodd" d="M9 2a1 1 0 00-.894.553L7.382 4H4a1 1 0 000 2v10a2 2 0 002 2h8a2 2 0 002-2V6a1 1 0 100-2h-3.382l-.724-1.447A1 1 0 0011 2H9zM7 8a1 1 0 012 0v6a1 1 0 11-2 0V8zm5-1a1 1 0 00-1 1v6a1 1 0 102 0V8a1 1 0 00-1-1z" clipRule="evenodd" /></svg>
+                                    </button>
+                                  )}
+                                </div>
                               </div>
                             </div>
                           )

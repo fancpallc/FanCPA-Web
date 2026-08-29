@@ -257,7 +257,7 @@ export function BookingForm({ slot, onSuccess, onCancel, timeZone }: BookingForm
     const isEmailFail = pending.emailResult && !pending.emailResult.success
     return (
       <div className="card rounded-2xl p-6 bg-blue-50 border-blue-300">
-        <h3 className="font-bold text-lg mb-2">Check your email 📧</h3>
+        <h3 className="font-bold text-lg mb-2">Booking Requested</h3>
         <p className="text-sm mb-2">{pending.message}</p>
         <p className="text-sm mb-2">Email: <strong>{pending.email}</strong></p>
         <p className="text-sm mb-2">Date: {pending.dateTime}</p>
@@ -310,7 +310,8 @@ export function BookingForm({ slot, onSuccess, onCancel, timeZone }: BookingForm
         <h3 className="font-bold text-lg mb-2">Booking Requested</h3>
         <p className="text-sm mb-2">Date: {success.dateTime}</p>
         {(success as any).purpose && <p className="text-sm mb-2">Purpose: <strong>{(success as any).purpose}</strong></p>}
-        <p className="text-sm mb-6 text-green-900">A confirmation email is on its way, please check your inbox.</p>
+        <p className="text-sm mb-2 text-green-900">A confirmation email is on its way, please check your inbox to confirm this appointment.</p>
+        <p className="text-xs text-gray-600 mb-6">No email yet? Check your spam folder.</p>
         
         {onCancel && (
           <button onClick={onCancel} className="mt-6 px-6 py-3 border border-slate-500 rounded-full text-sm font-medium hover:bg-gray-50 leading-none">

@@ -493,3 +493,326 @@ Suggested split:
 `CLIENT_PORTAL_PR_BREAKDOWN.md` § PR-10.
 
 **PR-10c — cleanup**: M4, M5, M6, M8, M9, M10, and the L items (including L7's setup doc).
+
+---
+
+# Rev 3 — requested copy / UX changes, verified 2026-08-29
+
+Each item below was checked against the working tree at `9959f64`. "Verdict" says whether the change is
+valid as asked, already done, or constrained by something outside our control.
+
+| # | Ask | Verdict | Anchor |
+|---|---|---|---|
+| R1 | "check your spam" on booking-requested | ✅ valid — but the panel you see is **Home.tsx**, not the one that already has the line | `src/pages/Home.tsx:182-197` |
+| R2 | "cancel anytime" → "cancel 24 hours prior" | ⚠️ valid copy change, but the backend has **no 24h cutoff** — copy would be false | `functions/api/booking/confirm/[token].ts:332` |
+| R3 | Drive link on the confirm page | ✅ valid — the link exists in the email, never on the page | `functions/api/booking/confirm/[token].ts:324-363` |
+| R4 | Calendar invite says "unknown sender" | ⚠️ partly — organizer name is fixable (calendar `summary`), the banner is Gmail-side | `functions/_lib/google-oauth.ts:110-126` |
+| R5 | Invite time in the client's timezone | ⚠️ valid and cheap — we already store the zone and throw it away; exact effect on the Google subject line needs one live test | `google-oauth.ts:113-114`, `google-calendar.ts:642-643` |
+| R6 | "Clients" → "Client Portal" in admin | ✅ valid, one word | `src/pages/Admin.tsx:255` |
+| R7 | Drive usage next to storage check | ✅ valid — R2 only today | `functions/api/admin/r2-usage.ts`, `src/pages/Admin.tsx:251-270` |
+| R8a | Edit-Drive-link button | ⚠️ saving already works; the ask is a view/edit toggle | `src/pages/AdminClients.tsx:793-838` |
+| R8b | Add-Drive-link button when none | ⚠️ already functional via the same input; affordance only | same |
+| R9 | Hyperlink the Drive link when not editing | ✅ valid — client-level link is never clickable | same |
+| R10 | Icons in the Actions column | ✅ valid — text "Delete" only, no per-row send | `src/pages/AdminClients.tsx:900-917`, `946-960` |
+| R11 | Drop "Also" from the cancel checkbox | ✅ valid, one label | `src/pages/AdminClients.tsx:664` |
+| R12 | Show phone / first / last on the client portal | ✅ **already done** on the admin card; ❌ missing from the public portal email | `AdminClients.tsx:757-762`; `functions/_lib/email.ts:245-279` |
+| R13 | Admin edits first/last name | ⚠️ writable today only as a side effect of Add Booking | `functions/api/admin/bookings/manual.ts:98-110` |
+| R14 | Expand/collapse long purpose | ✅ valid — purpose is unbounded and untruncated | `AdminClients.tsx:888`, `functions/api/booking.ts:66` |
+
+---
+
+### R1. "Please check your spam folder" on the booking-requested panel
+
+Valid, **but the file to change is not the obvious one**, and finding out why turned up a live bug.
+
+`functions/api/booking.ts:288-305` returns `{status: 'pending_confirmation', message, emailResult}`. It
+never returns `pending: true`. `BookingForm.tsx:188` branches on `if ((result as any).pending)` — always
+false. So the double-opt-in panel at `BookingForm.tsx:256-290` — the one titled "Check your email 📧",
+carrying the confirm-link fallback, the email-failure warning, **and the existing
+"No email yet? Check your spam folder." at line 281** — is dead code and has never rendered.
+
+Execution falls through to `setSuccess(...)` + `onSuccess(...)` at `BookingForm.tsx:200-220`, with
+`result.meetLink` / `result.dateTime` / `result.cancelUrl` all `undefined` (the 202 body has none of
+them). `Home.tsx:153` renders `{selectedSlot && !bookingResult && <BookingForm/>}`, so the moment
+`onSuccess` sets `bookingResult` the form unmounts and its own green "Booking Requested" panel
+(`BookingForm.tsx:308-320`) never paints either.
+
+**The panel the visitor actually sees is `src/pages/Home.tsx:182-197`** — the amber one. Its copy is
+already correct about the confirm step ("please check … inbox to confirm this appointment"); it just
+lacks the spam line.
+
+Two things to decide, and they are separable:
+- **The copy** — add the spam sentence to `Home.tsx:193-196`. One line, no risk.
+- **The dead panel** — either set `pending: true` in the 202 body so the richer panel (spam line,
+  confirm-link fallback, email-failure warning) starts working, or delete
+  `BookingForm.tsx:256-320` and its `pending`/`success` state. Right now the confirm-link escape hatch
+  for "Resend rejected the mail" is unreachable, which is the part that costs a booking. Recommend
+  fixing the flag rather than deleting.
+
+Worth also adding the line to the pending email body itself (`functions/_lib/email.ts:117-131`) — no,
+skip that: a reader of that email is by definition not in the spam folder.
+
+### R2. "Cancel anytime" → "cancel 24 hours prior"
+
+The string is at `functions/api/booking/confirm/[token].ts:332`:
+
+```html
+<p …>Cancel anytime: <a href="${cancelUrl}">${cancelUrl}</a></p>
+```
+
+It is the only occurrence — `grep -rni "anytime" src functions` returns this line and nothing else. The
+confirmation *email* (`email.ts:100`) says only "Cancel link:", so it needs no change unless you want
+the policy stated there too (recommended — the email outlives the page).
+
+**The blocker is that the policy does not exist.** `functions/api/cancel/[token].ts` looks up the booking
+by token and deletes it; there is no comparison of `slot_start` against `now` anywhere in the file (the
+only `Date.now()` at line 65 is the JWT `iat`). A client can cancel ten minutes before the meeting and
+the endpoint will happily free the slot. `functions/api/bookings/lookup.ts:115` filters the *list* to
+upcoming meetings but applies no notice window either.
+
+So this is two changes, not one:
+1. Enforce the window in `cancel/[token].ts` — reject with a "too late to cancel online, reply to this
+   email" page when `slot_start - now < 24h`.
+2. Then change the copy at `[token].ts:332` (and, ideally, `email.ts:100`).
+
+Shipping (2) without (1) puts a rule on the page that the software does not implement — worse than the
+current honest "anytime". Flagging so you can pick; if you only want the copy, say so and it ships alone.
+
+### R3. Drive link on the confirm page
+
+Valid and easy. The confirm page HTML (`booking/confirm/[token].ts:324-363`) renders date, purpose, Meet
+link, cancel link and an .ics button — no Drive link. The link is only in the email
+(`sendConfirmationEmail(… driveFolderUrl: driveLink …)` at line 293).
+
+`driveLink` is already in scope at the render site: declared at line 167, assigned at line 206 from
+`driveResult.yearFolderUrl`. So the block is a conditional paragraph next to the Meet link.
+
+Two guards it needs, both learned from M1/C1:
+- `driveLink` is `null` whenever Drive failed — the flow is deliberately non-blocking
+  (lines 198-244), so a Drive outage still confirms the booking. Render nothing rather than an empty
+  `href`, matching `email.ts:257` which gates on `startsWith('https://')`.
+- The year is `meetingYear` (line 167), so the label can read "Upload your documents for 2026".
+
+Suggested copy, since the ask is specifically to prompt an upload: *"Upload your documents here:
+&lt;link&gt; — anything you add to this folder is visible to us before the meeting."*
+
+### R4. Calendar invite organizer — "Invitation from an unknown sender"
+
+Partly fixable; the specific string is not ours.
+
+"Invitation from an unknown sender" is a **Gmail-side warning banner**, rendered by the recipient's
+Gmail above an event card when the organizer's address is not in their contacts and they have no prior
+correspondence. It is not the subject line, not a field in the Calendar API, and not something the
+sender can suppress. Google composes the subject itself as `Invitation: <summary> @ <when> (<email>)`;
+the `<summary>` half is already ours — `Meeting with ${firstName} ${lastName}`
+(`google-oauth.ts:111`, `google-calendar.ts:640`).
+
+What *is* controllable is the **organizer display name**, which is what the ask is really after:
+
+- The `organizer` field on the Event resource is read-only for `events.insert` — it cannot be set in
+  the payload at `google-oauth.ts:110-126`.
+- `BOOKING_CALENDAR_ID` is a secondary calendar (see the `forbiddenForServiceAccounts` /
+  "group calendar" handling at `google-calendar.ts:686-703`). For a secondary calendar, Google shows
+  the **calendar's `summary`** as the organizer. Renaming that calendar — Calendar UI, or
+  `PATCH /calendar/v3/calendars/{id}` with `{"summary": "FanCPA"}` — changes what recipients see from
+  the raw calendar name to the business name.
+- The underlying Google account's name (currently the `metagtmtest1@gmail.com` test account per the
+  comment at `google-oauth.ts:108`) is the other half. Changing it is an account setting, not code.
+
+Net: a one-time config change gets you a named organizer. The "unknown sender" banner will still appear
+for recipients who have never corresponded with that address, and disappears on its own once they have.
+No code change in this repo.
+
+### R5. Invite time rendered in the client's timezone
+
+Valid, cheap, and it exposes a small data-loss bug — but the exact effect on the Google-generated
+subject line should be confirmed with one live send before it is called done.
+
+We already collect and store the client's zone: `booking.ts:260` writes `time_zone` into
+`pending_bookings` (migration `0011`), and `confirm/[token].ts:249` carries it onto `bookings`. It is
+used to format *our* Resend email (`confirm/[token].ts:271`, `manual.ts:7-22`).
+
+It is **not** passed to Google. `CreateEventParams` (`google-calendar.ts:381-390`) has no timezone field,
+so both writers hardcode the office zone:
+
+```ts
+start: { dateTime: params.slot.start, timeZone: env?.TIMEZONE || TIMEZONE },  // google-oauth.ts:113
+start: { dateTime: params.slot.start, timeZone: TIMEZONE },                   // google-calendar.ts:642
+```
+
+`TIMEZONE` is `'America/New_York'` (`google-calendar.ts:93`). A Pacific-coast client gets an invite whose
+event timezone is Eastern.
+
+Safe to change: `slot.start` / `slot.end` are UTC ISO strings ending in `Z`, so the instant is fully
+determined by `dateTime` and `timeZone` only sets the display zone — swapping it **cannot shift the
+meeting**. Touch points: add `timeZone?` to `CreateEventParams`, thread it through
+`createBookingEvent` → `createBookingEventViaOAuth`, and pass `pending.time_zone` from
+`confirm/[token].ts:132-141` and `browserTz` from `manual.ts:220-229`.
+
+Caveat to verify before claiming the ask is met: recipients who have a Google account see the event card
+in **their own** Calendar timezone regardless of what we set, so the change is only observable in the
+subject line and for non-Google recipients. Whether Google's subject uses the event's `timeZone` or the
+organizer calendar's default is worth one test send rather than an assumption. If it turns out to use
+the organizer default, the fallback is to stop relying on Google's mail for this and put the correctly
+zoned time in our own Resend confirmation — which `confirm/[token].ts:269-280` already does correctly.
+
+### R6. "Clients" → "Client Portal"
+
+`src/pages/Admin.tsx:255` — `<a href="/admin/clients" …>Clients</a>`. Change the text only; the route
+stays `/admin/clients`.
+
+Note the destination page already calls itself "Admin Client Portal" (`AdminClients.tsx:467`), and
+`Nav.tsx:24` uses "Client Portal" for the *public* `/client-portal` page. So after this change two
+different links read "Client Portal" — one admin-only, one public. Suggest "Client Portal" on the admin
+button as asked and leaving the page heading as "Admin Client Portal" to keep them distinguishable.
+
+### R7. Drive usage alongside the storage check
+
+Valid — nothing checks Drive today. `functions/api/admin/r2-usage.ts` lists `portfolio/` objects in R2
+and compares against the 10 GB free tier; `Admin.tsx:251-270` renders it behind the "Check storage"
+button (cheap path by default, `?checkQuota=true` for the real LIST).
+
+Drive quota comes from `GET https://www.googleapis.com/drive/v3/about?fields=storageQuota`, which
+returns `{limit, usage, usageInDrive, usageInDriveTrash}`. Feasible with what is already configured:
+`ensureClientDriveFolder` already calls Drive with the OAuth refresh token, so the credential and scope
+exist. The only plumbing needed is exporting `getDriveAccessToken` from `google-drive.ts:13` (currently
+module-private) or adding a `getDriveStorageQuota(env)` beside it.
+
+Three things to get right:
+- `storageQuota` is **account-wide** — Drive + Gmail + Photos on the OAuth account, 15 GB on a free
+  Gmail. It is not scoped to our root folder. Label it as such; "Drive 4.2 GB of 15 GB (whole account)".
+- `limit` is **absent** from the response for unlimited/pooled accounts. Handle the missing key rather
+  than rendering `NaN%`.
+- Keep it on the same on-demand path as R2 (`?checkQuota=true`) — it is a Google round trip, and the
+  cheap path exists specifically to avoid per-request cost.
+
+### R8a / R8b / R9. Drive link: edit button, add button, hyperlink
+
+All three are the same block, `src/pages/AdminClients.tsx:793-838`. Current state: a permanently-editable
+`<input>` pre-filled with `client.drive_folder_url`, a conditional **Copy** button (only when a link
+exists, line 809), a permanently-visible **Save**, an "✎ manual" badge (line 837), inline validation
+against `/drive/folders/` (line 25-37, 288-299) and an "Unsaved changes" marker (line 824).
+
+- **R8a — "add an edit button".** The save path already works: `handleSaveDriveLink` (line 301) →
+  `PATCH /api/admin/clients/drive-folder` with `{contact_id, folder_url}` and no `year`, which
+  `drive-folder.ts:103-120` handles as the client-level write (sets `contacts.drive_folder_url`,
+  `drive_folder_id`, `drive_is_manual = 1`, and refreshes `parent_folder_*` on the year rows). So this
+  is not missing functionality — it is a view/edit mode toggle. That is worth doing anyway, because it
+  is what makes R9 possible.
+- **R8b — "add button when no link exists".** Also already functional: the input renders empty and Save
+  works, since the PATCH requires only `contact_id` + `folder_url`. Affordance only — an empty text box
+  does not read as "you may create one here". A dedicated "+ Add Drive link" button in the empty state
+  is the right call.
+- **R9 — "hyperlink when the edit button is not active".** This is the only one of the three that is a
+  genuine gap. The client-level link is *never* clickable today; only the per-year folders are
+  (`AdminClients.tsx:766-770`). Read mode should render
+  `<a href={drive_folder_url} target="_blank" rel="noopener noreferrer">`, and only render the anchor
+  when the value passes `isValidDriveFolderUrl` (line 25) — legacy rows can hold `fake-…` ids from stub
+  runs, and `email.ts:288` sets the precedent of refusing to use a non-`https://` value as an `href`.
+
+Suggested end state per card: **read mode** = hyperlink + Copy + "✎ manual" badge + `Edit` /
+`+ Add Drive link`; **edit mode** = today's input + validation + Save + Cancel.
+
+### R10. Icons in the Actions column
+
+Valid. Today `AdminClients.tsx:900-917` (desktop) and `946-960` (mobile) render one red pill reading
+"Delete", identical for past and upcoming rows. No send control exists per row — forwarding is
+client-level only, via the checkbox column plus "Send selected (n)" in the card header (line 775-784).
+
+The ask works, with one constraint worth knowing before it is built:
+
+- **Trash icon on past rows.** Fine as-is — `deleteBooking` has no upcoming restriction, and
+  `AdminClients.tsx:343-349` already sorts past rows to the bottom and blocks their checkboxes.
+- **Email icon on the row.** The backend supports it: `send-email.ts:56-67` takes `booking_ids` and
+  validates every id against the contact's **upcoming confirmed** set, 400ing otherwise
+  (`AdminClients.tsx:62` already maps that to "Past meetings cannot be forwarded"). A single-row send is
+  just `sendAdminClientEmail(contact_id, [booking_id])`. So the icon **must be hidden or disabled on
+  past rows** — it will 400 otherwise.
+- The email icon then creates a second send path alongside the F2 checkbox flow. That is fine, but it
+  should read as a shortcut, not a competing mechanism — same handler, and the header button keeps the
+  multi-select case.
+
+Accessibility: icon-only buttons need `aria-label` and `title`. The existing labels
+(`Delete booking for ${client.email} at ${r.slot_start}`, line 911) should be kept verbatim, not
+dropped along with the visible text — that regression is easy to make here.
+
+### R11. Drop "Also" from the cancel checkbox
+
+`src/pages/AdminClients.tsx:664` — "Also cancel meeting and free calendar?" → "Cancel meeting and free
+calendar?". Single occurrence; the sibling checkbox at line 668 ("Notify client by email?") already
+reads correctly. Note the modal's own confirm button is also labelled "Cancel" (line 671, meaning
+"dismiss") — after this change the dialog holds "Cancel meeting and free calendar?" and a "Cancel"
+button that does the opposite. Consider renaming the dismiss button to "Keep booking" while in there.
+
+### R12. Phone / first name / last name on the client portal
+
+**Already done on the admin card** — `AdminClients.tsx:757-762` renders
+`{first_name} {last_name} · {email}` and appends `· {phone}` when present. The data is there end to end:
+`search.ts:31,45,58` selects `c.phone`, and `AdminClientCard` (`src/lib/api.ts:225-231`) types it.
+
+So if "client portal" meant the admin page, there is nothing to build; the remaining gap is that phone
+is display-only (see R13).
+
+If you meant the **public** `/client-portal`, then it is a real gap and a different one: the page
+(`src/pages/ClientPortal.tsx`) only collects an email address and never displays anything back — by
+design, for anti-enumeration (line 154, "If an account with that email exists…"). The details land in
+the email, and `buildClientPortalDriveEmail` (`email.ts:245-279`) greets with `firstName` only, showing
+no last name and no phone. Adding them there is doable — `client-portal/lookup.ts` already loads the
+contact — but note this emails PII to whoever typed the address, on an unauthenticated endpoint. That
+is a deliberate trade-off, not an oversight. **Confirm which surface you meant**; I have assumed the
+admin card and marked it already-satisfied.
+
+### R13. Admin edits first / last name
+
+Names are already writable, but only as a **side effect**: `manual.ts:98-110` upserts the contact on
+every Add Booking and overwrites `first_name`, `last_name` (and `phone`, when supplied) for an existing
+email. So the admin can rename a client today only by creating a booking they do not want.
+
+There is no name-edit endpoint. `drive-folder.ts` PATCHes Drive fields only; `search.ts` is read-only.
+The card header (`AdminClients.tsx:757-762`) is static text.
+
+Given the stated purpose — "mainly during search" — the useful scope is a small
+`PATCH /api/admin/clients/{contact_id}` accepting `{first_name, last_name, phone}`, plus an inline edit
+on the card header. Two things it must do that the existing writers do not:
+- Trim and reject empty strings. `manual.ts` requires both names (line 65) but nothing else does, and a
+  blank name makes the client unfindable by the very search this exists to serve.
+- Leave `email` alone. Email is the Drive folder name (`google-drive.ts:173`) and the
+  `client_drive_folders.email` NOT NULL key; renaming it would orphan the folder. Editing names and
+  phone is safe; editing email is not, and should not be in this control.
+
+### R14. Expand / collapse long purpose
+
+Valid. `purpose` is unbounded: `booking.ts:66` does `String(body.purpose).trim()` with no length check,
+`manual.ts` has none either, and the column is plain `TEXT`. The desktop cell renders it raw —
+`AdminClients.tsx:888`, `<td className="p-2">{r.purpose || ''}</td>` — with no truncation, so a
+500-character purpose stretches the row and pushes Timezone / Meeting URL / Status / Actions off to the
+right. (The Meeting URL cell next to it already does the opposite, hard-truncating at
+`truncate max-w-[140px]`, line 890.) Mobile inlines it into a single `text-xs` line at 943.
+
+A ~100-character clamp with a "Show more" / "Show less" toggle is right. Two notes:
+- Keep the full text in the DOM (`title` attribute or a collapsed element), not a substring — the
+  purpose is also what goes into the calendar invite description, and admins compare them.
+- While clamping the display, consider a server-side cap on input too (say 2000 chars) in `booking.ts:66`
+  — it currently accepts a megabyte of text into a field that is echoed into the Google event
+  description and into email HTML. `escapeHtml` (`email.ts:4`) handles the injection risk; size is
+  unhandled.
+
+---
+
+## Rev 3 — suggested grouping
+
+**Copy-only, no behaviour change** (one small PR): R1 copy line, R6, R11, plus the R2 copy *if* the
+window is enforced in the same change.
+
+**UI work on the admin card**: R8a/R8b/R9 (Drive link read/edit mode), R10 (action icons), R13 (name
+edit + its endpoint), R14 (purpose clamp). These all touch `AdminClients.tsx` and should land together
+to avoid three rewrites of the same card.
+
+**Backend / integration**: R2's 24-hour cancel window (`cancel/[token].ts`), R3 (Drive link on the
+confirm page), R5 (thread `time_zone` into the Calendar event), R7 (Drive quota endpoint).
+
+**Config, not code**: R4 — rename the booking calendar and the OAuth account.
+
+**Needs a decision before work starts**: R2 (copy alone, or copy + enforcement), R12 (admin card —
+already done — or the public portal email), and the R1 dead-panel bug (restore `pending: true`, or
+delete the unreachable panel).

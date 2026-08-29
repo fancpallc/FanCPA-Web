@@ -45,7 +45,6 @@ export function Home() {
   const { grouped, loading: calLoading, error: calError, slotMinutes, excludeToday, refetch: refetchCalendar, removeSlot } = useCalendar(2)
   const [selectedDate, setSelectedDate] = useState<string | null>(null)
   const [selectedSlot, setSelectedSlot] = useState<any>(null)
-  const [bookingResult, setBookingResult] = useState<{ meetLink: string; dateTime: string; cancelUrl: string; source?: string; gcalError?: string; emailResult?: any; email?: string; purpose?: string | null } | null>(null)
   const [timeZone, setTimeZone] = useState(Intl.DateTimeFormat().resolvedOptions().timeZone)
 
   const selectedSlots = useMemo(() => {
@@ -121,9 +120,6 @@ export function Home() {
                 onDateSelect={(d) => {
                   setSelectedDate(d)
                   setSelectedSlot(null)
-                  setBookingResult(null)
-                  // The times open below the fold on a desktop viewport, which read as
-                  // "clicking the day did nothing".
                   requestAnimationFrame(() =>
                     document.getElementById('slot-picker')?.scrollIntoView({ behavior: 'smooth', block: 'nearest' }),
                   )
@@ -134,7 +130,7 @@ export function Home() {
               {/* Full width, sharing the calendar card's edges — a narrower centred panel
                   left a step against the card above it. */}
               <div id="slot-picker" className="mt-8 w-full space-y-6">
-                {selectedDate && !selectedSlot && !bookingResult && (
+                {selectedDate && !selectedSlot && (
                   <SlotPicker 
                     date={selectedDate} 
                     slots={selectedSlots} 
@@ -145,31 +141,22 @@ export function Home() {
                     setTimeZone={setTimeZone}
                   />
                 )}
-                {!selectedDate && !bookingResult && (
+                {!selectedDate && (
                   <div className="text-center text-sm text-gray-500 py-4">
                     Select a day above to see its available times.
                   </div>
                 )}
-                {selectedSlot && !bookingResult && (
+                {selectedSlot && (
                   <BookingForm
                     slot={selectedSlot}
                     timeZone={timeZone}
                     onSuccess={(result) => {
                       debug(`!!! HOME_BOOKING_SUCCESS slot=${selectedSlot.start} removing optimistic + refetching calendar with cache bust`)
-
-                      // The visitor sees plain-English copy; the vendor's own wording is
-                      // only useful to whoever has to fix the integration.
                       if (result.gcalError) debug(`!!! HOME_BOOKING_GCAL_ERROR ${result.gcalError}`)
                       if (result.emailResult && !result.emailResult.success) debug(`!!! HOME_BOOKING_EMAIL_ERROR ${result.emailResult.error}`)
-
-                      const emailToDisplay = result.email || result.emailResult?.email || 'your email address'
-                      console.log('!!! result', result)
-                      console.log('!!! slot', selectedSlot)
-
-                      setBookingResult({ ...result, email: emailToDisplay })
-                      // Optimistic removal so slot disappears immediately without reload
+                      // Pending path is rendered entirely inside BookingForm (Booking Requested + spam line).
+                      // This callback now only handles optimistic slot removal; no bookingResult state (dead amber panel removed).
                       removeSlot(selectedSlot)
-                      // Refetch with cache bust + short delay for Google FreeBusy propagation
                       refetchCalendar()
                       setTimeout(() => {
                         debug('!!! HOME_BOOKING_REFETCH_DELAYED for Google propagation')
@@ -178,25 +165,6 @@ export function Home() {
                     }}
                     onCancel={() => { setSelectedSlot(null); }}
                   />
-                )}
-                {bookingResult && (
-                  <div className="card rounded-2xl p-6 bg-amber-50 border-amber-300 text-center">
-                    <h3 className="font-black text-xl mb-3 text-amber-900">Booking Requested</h3>
-                    <p className="text-sm mb-2">
-                      Thank you for scheduling: {new Date(selectedSlot.start).toLocaleString('en-US', {
-                        weekday: 'long',
-                        month: 'long',
-                        day: 'numeric',
-                        hour: 'numeric',
-                        minute: '2-digit',
-                        timeZone: timeZone,
-                      })} ({timeZone})
-                    </p>
-                    {bookingResult.purpose && <p className="text-sm mb-2">Purpose: <strong>{bookingResult.purpose}</strong></p>}
-                    <p className="text-sm mb-4 text-amber-900">
-                      A confirmation email is on its way, <strong>please check {bookingResult.emailResult?.email || bookingResult.email || 'your email address'} inbox to confirm this appointment.</strong>
-                    </p>
-                  </div>
                 )}
               </div>
             </div>

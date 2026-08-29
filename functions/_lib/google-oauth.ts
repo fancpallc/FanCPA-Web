@@ -25,6 +25,7 @@ export interface OAuthCreateParams {
   slot: { date: string; start: string; end: string }
   cancelToken: string
   siteUrl: string
+  timeZone?: string
 }
 
 export interface OAuthCreateResult {
@@ -110,8 +111,8 @@ export async function createBookingEventViaOAuth(env: any, params: OAuthCreatePa
     const eventPayload = {
       summary: `Meeting with ${params.firstName} ${params.lastName}`,
       description: `${params.purpose || 'Intro call'}\n\nContact: ${params.email} ${params.phone || ''}\n\nCancel: ${siteUrl}/api/cancel/${params.cancelToken}`,
-      start: { dateTime: params.slot.start, timeZone: env?.TIMEZONE || TIMEZONE },
-      end: { dateTime: params.slot.end, timeZone: env?.TIMEZONE || TIMEZONE },
+      start: { dateTime: params.slot.start, timeZone: params.timeZone || env?.TIMEZONE || TIMEZONE },
+      end: { dateTime: params.slot.end, timeZone: params.timeZone || env?.TIMEZONE || TIMEZONE },
       attendees: [{ email: params.email, displayName: `${params.firstName} ${params.lastName}` }],
       conferenceData: {
         createRequest: {

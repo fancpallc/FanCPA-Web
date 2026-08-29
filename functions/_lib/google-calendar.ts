@@ -387,6 +387,7 @@ export interface CreateEventParams {
   slot: { date: string; start: string; end: string; available?: boolean }
   cancelToken: string
   siteUrl?: string
+  timeZone?: string
 }
 
 export interface CreateEventResult {
@@ -528,6 +529,7 @@ export async function createBookingEvent(env: any, params: CreateEventParams): P
       slot: params.slot,
       cancelToken: params.cancelToken,
       siteUrl,
+      timeZone: params.timeZone,
     })
     console.log(`!!! GCAL_OAUTH_RESULT source=${oauthResult.source} eventId=${oauthResult.calendarEventId} meetLink=${oauthResult.meetLink} error=${oauthResult.error || 'none'}`)
     if (oauthResult.source === 'live-oauth' && oauthResult.calendarEventId && !oauthResult.calendarEventId.startsWith('stub-')) {
@@ -636,11 +638,12 @@ export async function createBookingEvent(env: any, params: CreateEventParams): P
     // NOTE: Service accounts cannot invite attendees without Domain-Wide Delegation — causes 403 forbiddenForServiceAccounts
     // Fix: try with attendees first, if that fails with forbiddenForServiceAccounts, retry without attendees
     console.log(`!!! GCAL_EVENT_CREATE_START summary=Meeting with ${params.firstName} start=${params.slot.start} end=${params.slot.end} bookingId=${bookingId.slice(0, 8)}...`)
+    const eventTimeZone = params.timeZone || env?.TIMEZONE || TIMEZONE
     const basePayload = {
       summary: `Meeting with ${params.firstName} ${params.lastName}`,
       description: `${params.purpose || 'Intro call'}\n\nContact: ${params.email} ${params.phone || ''}\n\nCancel: ${siteUrl}/api/cancel/${params.cancelToken}`,
-      start: { dateTime: params.slot.start, timeZone: TIMEZONE },
-      end: { dateTime: params.slot.end, timeZone: TIMEZONE },
+      start: { dateTime: params.slot.start, timeZone: eventTimeZone },
+      end: { dateTime: params.slot.end, timeZone: eventTimeZone },
       reminders: {
         useDefault: false,
         overrides: [

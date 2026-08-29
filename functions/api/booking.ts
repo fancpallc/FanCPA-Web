@@ -70,6 +70,11 @@ export const onRequestPost: PagesFunction<Env> = async ({ request, env }) => {
 
     console.log(`!!! BOOKING_VALIDATION_START email=${email} slot=${slot?.start} confirmIntent=${body.confirmIntent}`)
 
+    // R14: cap purpose length to avoid megabyte into calendar description/email
+    if (purpose && purpose.length > 2000) {
+      return new Response(JSON.stringify({ error: 'Purpose too long (max 2000 chars)' }), { status: 400, headers })
+    }
+
     // Validation per tests: required fields first_name, last_name, email, slot
     if (!firstName || !lastName || !email || !slot?.start || !slot?.end) {
       console.log('!!! BOOKING_VALIDATION_FAILED missing required fields')
@@ -285,15 +290,23 @@ export const onRequestPost: PagesFunction<Env> = async ({ request, env }) => {
     })
     console.log(`!!! PENDING_EMAIL_RESULT success=${emailResult.success} source=${emailResult.source} id=${emailResult.id || 'none'} error=${emailResult.error || 'none'}`)
 
+    const isLocalOrTest = env?.ENVIRONMENT === 'local' || env?.ENVIRONMENT === 'test'
     return new Response(
       JSON.stringify({
         status: 'pending_confirmation',
+        pending: true,
         message: 'Confirmation email sent. Please click the link to finalize your booking.',
+        email: email,
+        dateTime: dateTimeEt,
+        purpose: purpose || null,
+        ...(isLocalOrTest ? { confirmUrl, confirmToken } : {}),
+        expiresAt,
         emailResult: {
           success: emailResult.success,
           source: emailResult.source,
           error: emailResult.error,
           id: emailResult.id,
+          email: email,
         },
       }),
       {

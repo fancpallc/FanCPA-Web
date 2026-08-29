@@ -120,11 +120,14 @@ export const onRequestPost = async ({ request, env }: { request: Request; env: a
 
   console.log(`!!! CLIENT_PORTAL_LOOKUP_FOUND contact=${contact.id} years=${yearFolders.length} meetings=${meetings.length}`)
 
-  // Rev2: ALWAYS send when contact exists, even with zero folders/meetings
+  // Rev2: ALWAYS send when contact exists, even with zero folders/meetings — R12: include lastName/phone
   try {
     await sendClientPortalDriveEmail({
       to: contact.email,
       firstName: contact.first_name,
+      lastName: contact.last_name,
+      email: contact.email,
+      phone: contact.phone || undefined,
       driveFolderUrl,
       yearFolders,
       meetings,

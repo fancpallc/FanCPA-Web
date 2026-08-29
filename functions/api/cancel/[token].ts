@@ -142,10 +142,10 @@ export const onRequestGet: PagesFunction<Env> = async ({ params, env, request })
       return new Response('<h1>DB not configured</h1>', { status: 500, headers })
     }
 
-    // Look up booking by cancel_token
+    // Look up booking by cancel_token — include slot_start for 24h cutoff
     let booking: any = null
     try {
-      const stmt = db.prepare('SELECT id, calendar_event_id, cancel_token, status FROM bookings WHERE cancel_token = ?1')
+      const stmt = db.prepare('SELECT id, calendar_event_id, cancel_token, status, slot_start FROM bookings WHERE cancel_token = ?1')
       booking = await stmt.bind(token).first()
     } catch {
       // Fallback for test D1
@@ -180,6 +180,37 @@ export const onRequestGet: PagesFunction<Env> = async ({ params, env, request })
         `,
         { status: 200, headers },
       )
+    }
+
+    // R2: 24h cancellation window — reject if within 24h of slot
+    if (booking.slot_start) {
+      try {
+        const slotTime = new Date(booking.slot_start).getTime()
+        const now = Date.now()
+        const twentyFourHours = 24 * 60 * 60 * 1000
+        if (!isNaN(slotTime) && slotTime - now < twentyFourHours && slotTime > now) {
+          const isJsonReq = request.headers.get('Accept')?.includes('application/json') || new URL(request.url).searchParams.get('format') === 'json'
+          if (isJsonReq) {
+            return new Response(JSON.stringify({ error: 'Too late to cancel — within 24 hours', slot_start: booking.slot_start }), {
+              status: 400,
+              headers: { 'Content-Type': 'application/json', 'Cache-Control': 'no-store' },
+            })
+          }
+          return new Response(
+            `
+            <div style="font-family:sans-serif;max-width:600px;margin:40px auto;padding:32px;border:1px solid #fca5a5;border-radius:24px;background:#fef2f2;">
+              <h1 style="font-family:Playfair Display,serif;font-size:24px;font-weight:900;">Too late to cancel online</h1>
+              <p style="margin-top:12px;color:#475569;line-height:1.6;">This meeting is within 24 hours and can no longer be cancelled online. Please reply to your confirmation email or contact us directly.</p>
+              <p style="margin-top:8px;color:#64748b;font-size:13px;">Meeting time: ${booking.slot_start}</p>
+              <div style="margin-top:24px;">
+                <a href="/" style="padding:12px 24px;background:#0f172a;color:white;border-radius:999px;text-decoration:none;font-weight:600;font-size:14px;">Back to home</a>
+              </div>
+            </div>
+            `,
+            { status: 400, headers }
+          )
+        }
+      } catch {}
     }
 
     // Delete from Google Calendar if event ID exists and not stub

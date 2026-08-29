@@ -10,7 +10,7 @@ export interface DriveFolderResult {
   error?: string
 }
 
-async function getDriveAccessToken(env: any): Promise<{ token: string; source: 'live' | 'stub'; error?: string }> {
+export async function getDriveAccessToken(env: any): Promise<{ token: string; source: 'live' | 'stub'; error?: string }> {
   if (hasOAuthConfig(env)) {
     const { accessToken, error } = await getOAuthAccessToken(env)
     if (accessToken) return { token: accessToken, source: 'live' }
@@ -195,5 +195,32 @@ export async function ensureClientDriveFolder(
     yearFolderId: yearFolder.id,
     yearFolderUrl: `https://drive.google.com/drive/folders/${yearFolder.id}`,
     source: 'live',
+  }
+}
+
+export async function getDriveStorageQuota(env: any): Promise<{ usage: number; limit?: number; usageInDrive?: number; usageInDriveTrash?: number; source: 'live' | 'stub'; error?: string }> {
+  const { token, source, error } = await getDriveAccessToken(env)
+  if (source === 'stub' || !token) {
+    return { usage: 0, source: 'stub', error: error || 'Drive not configured' }
+  }
+  try {
+    const res = await fetch('https://www.googleapis.com/drive/v3/about?fields=storageQuota', {
+      headers: { Authorization: `Bearer ${token}` },
+    })
+    if (!res.ok) {
+      const txt = await res.text().catch(() => '')
+      return { usage: 0, source: 'live', error: `Drive about failed ${res.status} ${txt.slice(0, 200)}` }
+    }
+    const data = (await res.json()) as any
+    const q = data.storageQuota || {}
+    return {
+      usage: Number(q.usage || 0),
+      limit: q.limit ? Number(q.limit) : undefined,
+      usageInDrive: q.usageInDrive ? Number(q.usageInDrive) : undefined,
+      usageInDriveTrash: q.usageInDriveTrash ? Number(q.usageInDriveTrash) : undefined,
+      source: 'live',
+    }
+  } catch (e: any) {
+    return { usage: 0, source: 'live', error: e?.message || String(e) }
   }
 }
