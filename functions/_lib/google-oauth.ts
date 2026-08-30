@@ -119,10 +119,10 @@ export async function getOAuthAccessToken(env: any): Promise<{ accessToken: stri
     const json = JSON.parse(text) as any
     console.log(`!!! OAUTH_TOKEN_SUCCESS hasAccessToken=${!!json.access_token} expiresIn=${json.expires_in}`)
     return { accessToken: json.access_token }
-  } catch (e: any) {
+        } catch (e: any) {
     console.log(`!!! OAUTH_TOKEN_EXCEPTION ${e?.message}`)
     return { accessToken: '', error: e?.message }
-  }
+        }
 }
 
 export async function createBookingEventViaOAuth(env: any, params: OAuthCreateParams): Promise<OAuthCreateResult> {
