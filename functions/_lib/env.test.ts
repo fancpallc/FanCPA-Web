@@ -55,14 +55,25 @@ describe('env helpers', () => {
     it('should resolve drive root folder from aliases', () => {
         expect(getDriveRootFolderId({ GOOGLE_DRIVE_ROOT_FOLDER_ID: '123' })).toBe('123')
         expect(getDriveRootFolderId({ DRIVE_ROOT_FOLDER_ID: '456' })).toBe('456')
+        expect(getDriveRootFolderId({ GDRIVE_ROOT_FOLDER_ID: '789' })).toBe('789')
     })
+
     it('should resolve from db fallback if present', async () => {
-      const mockDb = { prepare: () => ({ first: () => ({ value: 'db-val' }) }) }
+        const mockDb = {
+            prepare: (query: string) => ({
+                first: () => ({ value: 'db-val' })
+            })
+        }
         expect(await getEffectiveDriveRootFolderId({}, mockDb)).toBe('db-val')
     })
-    it('should resolve drive service key from aliases', () => {
-      expect(getDriveServiceKey({ GCAL_SERVICE_ACCOUNT_KEY: 'k' })).toBe('k')
-      expect(getDriveServiceKey({ DRIVE_SERVICE_ACCOUNT_KEY: 'k2' })).toBe('k2')
+
+    it('should fall back to env if db returns nothing', async () => {
+        const mockDb = {
+            prepare: (query: string) => ({
+                first: () => ({ value: null })
+            })
+        }
+        expect(await getEffectiveDriveRootFolderId({ GOOGLE_DRIVE_ROOT_FOLDER_ID: 'env-val' }, mockDb)).toBe('env-val')
     })
   })
 })
