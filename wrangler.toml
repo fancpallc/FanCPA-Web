@@ -4,6 +4,9 @@ pages_build_output_dir = "dist"
 
 # Non-PII vars for local dev. D1/R2 IDs are placeholders until scripts/setup-cloudflare.sh runs.
 [vars]
+# Drive root folder where client email folders created. If empty, uses My Drive root.
+# Set via Cloudflare Dashboard: GOOGLE_DRIVE_ROOT_FOLDER_ID = "1A2b..."
+# With OAuth Option B, folders owned by you, shared Writer with client.
 ENVIRONMENT = "local"
 SITE_URL = "http://localhost:8788"
 SLOT_DURATION_MINUTES = "60"
