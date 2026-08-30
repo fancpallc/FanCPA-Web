@@ -35,7 +35,7 @@ export const onRequestPost: PagesFunction<Env> = async ({ request, env }) => {
     await sendAdminDriveEmail({
       to: contact.email,
       firstName: contact.first_name,
-      driveLink: folder?.folder_url || 'No folder found',
+      driveLink: folder?.folder_url || '',
       meetings: meetings.results.map((m: any) => m.slot_start),
       env
     })

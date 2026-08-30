@@ -25,6 +25,8 @@ function App() {
       ? `Edit your site — ${siteName}`
       : path.startsWith('/health')
         ? `System health — ${siteName}`
+        : path.startsWith('/client-portal')
+          ? `Client Portal — ${siteName}`
         : pageTitle || siteName
   }, [path, siteName, pageTitle])
 
@@ -66,7 +68,7 @@ function App() {
   }
 
   if (path.startsWith('/client-portal')) {
-    return <ClientPortal />
+    return <Layout title={siteName}><ClientPortal /></Layout>
   }
 
   return (
