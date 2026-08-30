@@ -164,7 +164,13 @@ export const onRequestGet: PagesFunction<Env> = async ({ params, env, request })
     console.log('!!! CONFIRM_BOOKING_INSERT_START')
     let contactId = pending.contact_id
     let bookingId = crypto.randomUUID().replace(/-/g, '').slice(0, 16)
-    let driveResult = null, driveLink = null, meetingYear = new Date(pending.slot_start).getFullYear()
+    let driveResult = null, driveLink = null
+
+    // Normalize year
+    let meetingYear = parseInt(new Date(pending.slot_start).getFullYear().toString(), 10)
+    if (isNaN(meetingYear) || meetingYear < 2000 || meetingYear > 2100) {
+      meetingYear = new Date().getFullYear()
+    }
 
     try {
       // Ensure contact exists (might have been created in pending flow)
@@ -176,9 +182,11 @@ export const onRequestGet: PagesFunction<Env> = async ({ params, env, request })
           const newId = crypto.randomUUID().replace(/-/g, '').slice(0, 16)
           contactId = newId
           const insertStmt = db.prepare('INSERT INTO contacts (id, first_name, last_name, email, phone, created_at) VALUES (?1, ?2, ?3, ?4, ?5, datetime("now"))')
-          await insertStmt.bind(newId, pending.first_name, pending.last_name, pending.email, pending.phone || null).run().catch(() => {})
+          await insertStmt.bind(newId, pending.first_name, pending.last_name, pending.email, pending.phone || null).run()
         }
       }
+
+      if (!contactId) throw new Error('Failed to ensure contact')
 
       try {
         driveResult = await ensureClientDriveFolder(env, pending.email, meetingYear)
@@ -193,10 +201,11 @@ export const onRequestGet: PagesFunction<Env> = async ({ params, env, request })
       // The pending row already carries the slot the visitor picked; carry it across so
       // "Manage bookings" shows the meeting time rather than the moment they confirmed.
       const insertBookingStmt = db.prepare('INSERT INTO bookings (id, contact_id, calendar_event_id, purpose, cancel_token, status, slot_start, slot_end, created_at, meet_link, time_zone, drive_folder_url) VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, datetime("now"), ?9, ?10, ?11)')
-      await insertBookingStmt.bind(bookingId, contactId!, calendarEventId, pending.purpose || null, cancelToken, 'confirmed', pending.slot_start, pending.slot_end, meetLink, pending.time_zone || null, driveLink).run()
+      await insertBookingStmt.bind(bookingId, contactId, calendarEventId, pending.purpose || null, cancelToken, 'confirmed', pending.slot_start, pending.slot_end, meetLink, pending.time_zone || null, driveLink).run()
       console.log(`!!! CONFIRM_BOOKING_INSERT_OK bookingId=${bookingId}`)
     } catch (e: any) {
       console.log(`!!! CONFIRM_BOOKING_INSERT_ERROR ${e?.message}`)
+      return new Response(`<h1>Booking insertion failed</h1><p>Please try again later.</p>`, { status: 500, headers: htmlHeaders })
     }
 
     // Delete pending (or mark confirmed)

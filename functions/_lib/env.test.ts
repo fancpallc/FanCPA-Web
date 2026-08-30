@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest'
-import { getEnvironment, isPreview, isAlpha, isProduction, isLocal } from './env'
+import { getEnvironment, isPreview, isAlpha, isProduction, isLocal, getDriveRootFolderId, getEffectiveDriveRootFolderId, getDriveServiceKey } from './env'
 
 describe('env helpers', () => {
   it('should return production when ENVIRONMENT=production', () => {
@@ -50,4 +50,31 @@ describe('env helpers', () => {
     expect(isLocal('test')).toBe(true)
     expect(isLocal('production')).toBe(false)
   })
+
+  describe('drive root alias', () => {
+    it('should resolve drive root folder from aliases', () => {
+        expect(getDriveRootFolderId({ GOOGLE_DRIVE_ROOT_FOLDER_ID: '123' })).toBe('123')
+        expect(getDriveRootFolderId({ DRIVE_ROOT_FOLDER_ID: '456' })).toBe('456')
+        expect(getDriveRootFolderId({ GDRIVE_ROOT_FOLDER_ID: '789' })).toBe('789')
+    })
+
+    it('should resolve from db fallback if present', async () => {
+        const mockDb = {
+            prepare: (query: string) => ({
+                first: () => ({ value: 'db-val' })
+            })
+        }
+        expect(await getEffectiveDriveRootFolderId({}, mockDb)).toBe('db-val')
+    })
+
+    it('should fall back to env if db returns nothing', async () => {
+        const mockDb = {
+            prepare: (query: string) => ({
+                first: () => ({ value: null })
+            })
+        }
+        expect(await getEffectiveDriveRootFolderId({ GOOGLE_DRIVE_ROOT_FOLDER_ID: 'env-val' }, mockDb)).toBe('env-val')
+    })
+  })
 })
+
