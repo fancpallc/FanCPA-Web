@@ -1,6 +1,7 @@
 import { getBookingCalendarId, getGcalServiceKey, getResendApiKey, hasOAuthConfig } from '../../../_lib/env'
 import { createBookingEvent, TIMEZONE, getDiagInfo } from '../../../_lib/google-calendar'
 import { sendConfirmationEmail } from '../../../_lib/email'
+import { ensureClientDriveFolder } from '../../../_lib/google-drive'
 
 export interface Env {
   DB?: any
@@ -162,6 +163,15 @@ export const onRequestGet: PagesFunction<Env> = async ({ params, env, request })
     // Insert into bookings (only after Google 200)
     console.log('!!! CONFIRM_BOOKING_INSERT_START')
     let contactId = pending.contact_id
+    let bookingId = crypto.randomUUID().replace(/-/g, '').slice(0, 16)
+    let driveResult = null, driveLink = null
+
+    // Normalize year
+    let meetingYear = parseInt(new Date(pending.slot_start).getFullYear().toString(), 10)
+    if (isNaN(meetingYear) || meetingYear < 2000 || meetingYear > 2100) {
+      meetingYear = new Date().getFullYear()
+    }
+
     try {
       // Ensure contact exists (might have been created in pending flow)
       if (!contactId) {
@@ -172,17 +182,30 @@ export const onRequestGet: PagesFunction<Env> = async ({ params, env, request })
           const newId = crypto.randomUUID().replace(/-/g, '').slice(0, 16)
           contactId = newId
           const insertStmt = db.prepare('INSERT INTO contacts (id, first_name, last_name, email, phone, created_at) VALUES (?1, ?2, ?3, ?4, ?5, datetime("now"))')
-          await insertStmt.bind(newId, pending.first_name, pending.last_name, pending.email, pending.phone || null).run().catch(() => {})
+          await insertStmt.bind(newId, pending.first_name, pending.last_name, pending.email, pending.phone || null).run()
         }
       }
-      const bookingId = crypto.randomUUID().replace(/-/g, '').slice(0, 16)
+
+      if (!contactId) throw new Error('Failed to ensure contact')
+
+      try {
+        driveResult = await ensureClientDriveFolder(env, pending.email, meetingYear)
+        driveLink = driveResult?.yearFolderUrl
+        const upsert = db.prepare(`INSERT INTO client_drive_folders (contact_id,email,year,folder_id,folder_url,parent_folder_id,parent_folder_url) VALUES (?1,?2,?3,?4,?5,?6,?7) ON CONFLICT(contact_id,year) DO UPDATE SET folder_url=excluded.folder_url, updated_at=datetime('now')`)
+        await upsert.bind(contactId, pending.email.toLowerCase(), meetingYear, driveResult.yearFolderId, driveResult.yearFolderUrl, driveResult.emailFolderId, driveResult.emailFolderUrl).run()
+        await db.prepare('UPDATE contacts SET drive_folder_url=?1 WHERE id=?2').bind(driveResult.emailFolderUrl, contactId).run()
+      } catch (e: any) {
+        console.log(`!!! CONFIRM_DRIVE_ERROR ${e.message}`)
+      }
+
       // The pending row already carries the slot the visitor picked; carry it across so
       // "Manage bookings" shows the meeting time rather than the moment they confirmed.
-      const insertBookingStmt = db.prepare('INSERT INTO bookings (id, contact_id, calendar_event_id, purpose, cancel_token, status, slot_start, slot_end, created_at) VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, datetime("now"))')
-      await insertBookingStmt.bind(bookingId, contactId!, calendarEventId, pending.purpose || null, cancelToken, 'confirmed', pending.slot_start, pending.slot_end).run()
+      const insertBookingStmt = db.prepare('INSERT INTO bookings (id, contact_id, calendar_event_id, purpose, cancel_token, status, slot_start, slot_end, created_at, meet_link, time_zone, drive_folder_url) VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, datetime("now"), ?9, ?10, ?11)')
+      await insertBookingStmt.bind(bookingId, contactId, calendarEventId, pending.purpose || null, cancelToken, 'confirmed', pending.slot_start, pending.slot_end, meetLink, pending.time_zone || null, driveLink).run()
       console.log(`!!! CONFIRM_BOOKING_INSERT_OK bookingId=${bookingId}`)
     } catch (e: any) {
       console.log(`!!! CONFIRM_BOOKING_INSERT_ERROR ${e?.message}`)
+      return new Response(`<h1>Booking insertion failed</h1><p>Please try again later.</p>`, { status: 500, headers: htmlHeaders })
     }
 
     // Delete pending (or mark confirmed)
@@ -223,6 +246,8 @@ export const onRequestGet: PagesFunction<Env> = async ({ params, env, request })
       cancelUrl,
       dateTime: dateTimeEt,
       purpose: pending.purpose,
+      driveFolderUrl: driveLink || undefined,
+      driveYear: meetingYear,
       env: {
         RESEND_API_KEY: getResendApiKey(env) || env?.RESEND_API_KEY,
         EMAIL_FROM: env?.EMAIL_FROM,
