@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { useAdminAuth } from '../hooks/useAdminAuth';
-import { searchAdminClients, updateAdminDriveFolder, sendAdminClientEmail, createManualBooking, deleteBooking, AdminClientRow } from '../lib/api';
+import { searchAdminClients, updateAdminDriveFolder, sendAdminClientEmail, AdminClientRow } from '../lib/api';
 import { toast } from 'react-hot-toast';
 import { Link } from 'react-router-dom';
 
@@ -30,31 +30,6 @@ export default function AdminClients() {
     }
   };
 
-  const handleCreateBooking = async () => {
-    if (!newBooking.first_name || !newBooking.last_name || !newBooking.email || !newBooking.slot_start || !newBooking.slot_end) {
-      toast.error('Required fields missing');
-      return;
-    }
-    if (new Date(newBooking.slot_start) >= new Date(newBooking.slot_end)) {
-      toast.error('Start must be before end');
-      return;
-    }
-    setLoading(true);
-    try {
-      const res = await createManualBooking({
-        ...newBooking,
-        slot_start: new Date(newBooking.slot_start).toISOString(),
-        slot_end: new Date(newBooking.slot_end).toISOString()
-      });
-      toast.success('Booking created: ' + res.bookingId);
-      setShowAddModal(false);
-      handleSearch();
-    } catch (err: any) {
-      toast.error('Create failed: ' + err.message);
-    } finally {
-      setLoading(false);
-    }
-  };
 
   const handleSave = async (contact_id: string, year: number | undefined) => {
     const url = editing[contact_id];
@@ -75,21 +50,6 @@ export default function AdminClients() {
       toast.success('Email sent');
     } catch (err: any) {
       toast.error('Failed to send: ' + err.message);
-    }
-  };
-
-  const handleDeleteBooking = async () => {
-    if (!deleteTarget?.booking_id) return;
-    setLoading(true);
-    try {
-      await deleteBooking(deleteTarget.booking_id, cancelMeetingChecked);
-      toast.success('Booking deleted');
-      setDeleteTarget(null);
-      handleSearch();
-    } catch (err: any) {
-      toast.error('Delete failed: ' + err.message);
-    } finally {
-      setLoading(false);
     }
   };
 
@@ -124,7 +84,7 @@ export default function AdminClients() {
             <p className="text-xs text-gray-500 mb-4">GDrive auto generated based on email+year, Meet auto generated from time</p>
             <div className="flex justify-end gap-2">
               <button onClick={() => setShowAddModal(false)} className="px-4 py-1">Cancel</button>
-              <button onClick={handleCreateBooking} className="bg-blue-600 text-white px-4 py-1 rounded">Create</button>
+              
             </div>
           </div>
         </div>
@@ -141,7 +101,6 @@ export default function AdminClients() {
             </label>
             <div className="flex justify-end gap-2">
               <button onClick={() => setDeleteTarget(null)} className="px-4 py-1">Cancel</button>
-              <button onClick={handleDeleteBooking} className="bg-red-600 text-white px-4 py-1 rounded">Delete</button>
             </div>
           </div>
         </div>
