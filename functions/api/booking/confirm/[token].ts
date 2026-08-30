@@ -23,6 +23,35 @@ export interface Env {
   [key: string]: any
 }
 
+function escapeHtml(str: string): string {
+  return String(str ?? '')
+    .replace(/&/g, '&amp;')
+    .replace(/</g, '&lt;')
+    .replace(/>/g, '&gt;')
+    .replace(/"/g, '&quot;')
+    .replace(/'/g, '&#39;')
+}
+
+function isFakeMeetLink(link?: string | null): boolean {
+  if (!link) return true
+  const s = String(link).toLowerCase()
+  return s.includes('fake-') || s.includes('fake_') || s.startsWith('missing-') || s.includes('stub-')
+}
+
+function htmlPage({ title, body }: { title: string; body: string }): string {
+  return `<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8"/>
+<meta name="viewport" content="width=device-width, initial-scale=1"/>
+<title>${escapeHtml(title)}</title>
+</head>
+<body style="font-family:Inter,system-ui,sans-serif;background:#fff;color:#0f172a;margin:0;padding:0;">
+${body}
+</body>
+</html>`
+}
+
 export const onRequestGet: PagesFunction<Env> = async ({ params, env, request }) => {
   const headers = {
     'Cache-Control': 'no-store',
@@ -39,7 +68,7 @@ export const onRequestGet: PagesFunction<Env> = async ({ params, env, request })
     const token = (params as any)?.token as string
     if (!token) {
       console.log('!!! CONFIRM_MISSING_TOKEN')
-      return new Response('<h1>Missing token</h1><p>Confirm link invalid.</p>', { status: 400, headers: htmlHeaders })
+      return new Response(htmlPage({ title: 'Invalid link', body: `<div style="max-width:600px;margin:40px auto;padding:24px;"><h1>Invalid link</h1><p>Confirm link invalid.</p><a href="/" style="display:inline-block;margin-top:16px;padding:10px 20px;background:#0f172a;color:white;border-radius:999px;text-decoration:none;">Back to home</a></div>` }), { status: 400, headers: htmlHeaders })
     }
 
     console.log(`!!! CONFIRM_TOKEN token=${token.slice(0, 8)}...`)
@@ -47,7 +76,7 @@ export const onRequestGet: PagesFunction<Env> = async ({ params, env, request })
     const db = (env as any)?.DB
     if (!db) {
       console.log('!!! CONFIRM_DB_MISSING')
-      return new Response('<h1>DB not configured</h1>', { status: 500, headers: htmlHeaders })
+      return new Response(htmlPage({ title: 'Temporarily unavailable', body: `<div style="max-width:600px;margin:40px auto;padding:24px;"><h1>Temporarily unavailable</h1><p>Please try again in a moment.</p><a href="/" style="display:inline-block;margin-top:16px;padding:10px 20px;background:#0f172a;color:white;border-radius:999px;text-decoration:none;">Back to home</a></div>` }), { status: 500, headers: htmlHeaders })
     }
 
     // Lookup pending booking
@@ -57,7 +86,6 @@ export const onRequestGet: PagesFunction<Env> = async ({ params, env, request })
       pending = await stmt.bind(token).first()
     } catch (e: any) {
       console.log(`!!! CONFIRM_LOOKUP_ERROR ${e?.message}`)
-      // Try fallback without contact_id etc
       try {
         const stmt = db.prepare('SELECT * FROM pending_bookings WHERE confirm_token = ?1')
         pending = await stmt.bind(token).first()
@@ -67,13 +95,15 @@ export const onRequestGet: PagesFunction<Env> = async ({ params, env, request })
     if (!pending) {
       console.log('!!! CONFIRM_NOT_FOUND')
       return new Response(
-        `
-        <div style="font-family:sans-serif;max-width:600px;margin:40px auto;padding:24px;border:1px solid #e2e8f0;border-radius:16px;">
+        htmlPage({
+          title: 'Link invalid',
+          body: `
+        <div style="max-width:600px;margin:40px auto;padding:24px;border:1px solid #e2e8f0;border-radius:16px;">
           <h2>Confirm link invalid or already used</h2>
-          <p>Token <code>${token.slice(0, 8)}...</code> not found. It may have expired or already been confirmed.</p>
+          <p>It may have expired or already been confirmed.</p>
           <a href="/" style="display:inline-block;margin-top:16px;padding:10px 20px;background:#0f172a;color:white;border-radius:999px;text-decoration:none;">Back to home</a>
         </div>
-        `,
+        `}),
         { status: 404, headers: htmlHeaders }
       )
     }
@@ -90,13 +120,15 @@ export const onRequestGet: PagesFunction<Env> = async ({ params, env, request })
         await delStmt.bind(token).run()
       } catch {}
       return new Response(
-        `
-        <div style="font-family:sans-serif;max-width:600px;margin:40px auto;padding:24px;border:1px solid #e2e8f0;border-radius:16px;">
+        htmlPage({
+          title: 'Link expired',
+          body: `
+        <div style="max-width:600px;margin:40px auto;padding:24px;border:1px solid #e2e8f0;border-radius:16px;">
           <h2>Confirm link expired ⏰</h2>
-          <p>This link expired at ${pending.expires_at}. Please book again.</p>
+          <p>This link has expired. Please book again — links are valid for 1 hour.</p>
           <a href="/#calendar" style="display:inline-block;margin-top:16px;padding:10px 20px;background:#0f172a;color:white;border-radius:999px;text-decoration:none;">Book again</a>
         </div>
-        `,
+        `}),
         { status: 410, headers: htmlHeaders }
       )
     }
@@ -104,13 +136,15 @@ export const onRequestGet: PagesFunction<Env> = async ({ params, env, request })
     if (pending.status === 'confirmed') {
       console.log('!!! CONFIRM_ALREADY_CONFIRMED')
       return new Response(
-        `
-        <div style="font-family:sans-serif;max-width:600px;margin:40px auto;padding:24px;border:1px solid #e2e8f0;border-radius:16px;">
+        htmlPage({
+          title: 'Already confirmed',
+          body: `
+        <div style="max-width:600px;margin:40px auto;padding:24px;border:1px solid #e2e8f0;border-radius:16px;">
           <h2>Already confirmed ✅</h2>
-          <p>Your meeting for ${pending.slot_start} is already confirmed.</p>
+          <p>Your meeting is already confirmed. Check your email for details.</p>
           <a href="/" style="display:inline-block;margin-top:16px;padding:10px 20px;background:#0f172a;color:white;border-radius:999px;text-decoration:none;">Back to home</a>
         </div>
-        `,
+        `}),
         { status: 200, headers: htmlHeaders }
       )
     }
@@ -120,7 +154,7 @@ export const onRequestGet: PagesFunction<Env> = async ({ params, env, request })
     console.log(`!!! CONFIRM_SLOT_CHECK start=${pending.slot_start} now=${new Date().toISOString()}`)
     if (isNaN(slotStartDate.getTime()) || slotStartDate.getTime() < Date.now()) {
       console.log('!!! CONFIRM_SLOT_PAST')
-      return new Response('<h1>Slot expired — in past</h1><p>Please book a new slot.</p>', { status: 409, headers: htmlHeaders })
+      return new Response(htmlPage({ title: 'Slot expired', body: `<div style="max-width:600px;margin:40px auto;padding:24px;"><h1>Slot expired — in the past</h1><p>Please book a new time.</p><a href="/#calendar" style="display:inline-block;margin-top:16px;padding:10px 20px;background:#0f172a;color:white;border-radius:999px;text-decoration:none;">Book again</a></div>` }), { status: 409, headers: htmlHeaders })
     }
 
     // Create Google Calendar event with purpose included
@@ -149,14 +183,15 @@ export const onRequestGet: PagesFunction<Env> = async ({ params, env, request })
     if (expectedLive && source === 'stub') {
       console.log(`!!! CONFIRM_GCAL_STUB_FAIL error=${gcalError} — not inserting, returning 502`)
       return new Response(
-        `
-        <div style="font-family:sans-serif;max-width:600px;margin:40px auto;padding:24px;border:1px solid #fca5a5;border-radius:16px;background:#fef2f2;">
+        htmlPage({
+          title: 'Scheduling failed',
+          body: `
+        <div style="max-width:600px;margin:40px auto;padding:24px;border:1px solid #fca5a5;border-radius:16px;background:#fef2f2;">
           <h2>Failed to schedule — calendar error</h2>
-          <p>${gcalError || 'Google Calendar event creation failed'}</p>
-          <pre style="font-size:11px; background:white; padding:12px; border-radius:8px; overflow:auto;">${JSON.stringify(diagBefore, null, 2)}</pre>
+          <p>${escapeHtml(gcalError || 'Google Calendar event creation failed')}</p>
           <a href="/#calendar" style="display:inline-block;margin-top:16px;padding:10px 20px;background:#0f172a;color:white;border-radius:999px;text-decoration:none;">Try again</a>
         </div>
-        `,
+        `}),
         { status: 502, headers: htmlHeaders }
       )
     }
@@ -322,52 +357,53 @@ export const onRequestGet: PagesFunction<Env> = async ({ params, env, request })
       )
     }
 
+    // V4 + S3 fix: detect fake Meet links (coalesced from google-calendar.ts) and don't render as live
+    const hasRealMeet = meetLink && !isFakeMeetLink(meetLink) && String(meetLink).startsWith('https://')
+    const safeMeet = hasRealMeet ? meetLink : null
+    const hasRealDrive = driveLink && String(driveLink).startsWith('https://') && !String(driveLink).toLowerCase().includes('fake-')
+
     return new Response(
-      `
-      <div style="font-family:sans-serif;max-width:640px;margin:40px auto;padding:32px;border:1px solid #e2e8f0;border-radius:24px;background:#f0fdf4;">
-        <h1 style="font-family:Playfair Display,serif;font-size:28px;font-weight:900;letter-spacing:-0.02em;">Meeting Confirmed ✅</h1>
-        <p style="margin-top:12px;color:#475569;line-height:1.6;">Hi ${pending.first_name}, your meeting for <strong>${dateTimeEt}</strong> is confirmed.</p>
-        ${pending.purpose ? `<div style="margin-top:12px;background:white;padding:12px;border-radius:8px;border:1px solid #e2e8f0;"><strong>Purpose:</strong> ${pending.purpose}</div>` : ''}
-        <p style="margin-top:12px;">Meet: <a href="${meetLink}" target="_blank" rel="noopener noreferrer" style="color:#0f172a; text-decoration:underline;">${meetLink || 'No Meet link (bare event — group calendar may not support Meet via SA, but slot blocked)'}</a></p>
-        ${driveLink && String(driveLink).startsWith('https://') ? `<p style="margin-top:12px;padding:12px;background:white;border:1px solid #e2e8f0;border-radius:8px;">Upload your documents for ${meetingYear} here: <a href="${driveLink}" target="_blank" rel="noopener noreferrer" style="color:#0f172a;text-decoration:underline;font-weight:600;">${driveLink}</a><br/><span style="font-size:12px;color:#64748b;">Anything you add to this folder is visible to us before the meeting.</span></p>` : ''}
-        ${gcalError ? `<div style="margin-top:8px;padding:8px;background:#fef3c7;border:1px solid #fcd34d;border-radius:8px;font-size:12px;">Note: ${gcalError}</div>` : ''}
-        <p style="margin-top:8px;font-size:13px;color:#64748b;">Cancel 24 hours prior: <a href="${cancelUrl}" style="color:#dc2626; text-decoration:underline;">${cancelUrl}</a></p>
-        <div style="margin-top:24px;display:flex;gap:12px;flex-wrap:wrap;">
-          <a href="${meetLink}" target="_blank" style="padding:12px 24px;background:#0f172a;color:white;border-radius:999px;text-decoration:none;font-weight:600;font-size:14px;">Open Meet →</a>
-          <a href="/" style="padding:12px 24px;background:white;border:1px solid #e2e8f0;border-radius:999px;text-decoration:none;color:#0f172a;font-weight:600;font-size:14px;">Back to home</a>
-          <button onclick="(() => {
-            const formatDate = (date) => date.toISOString().replace(/[-:]/g, '').split('.')[0] + 'Z';
-            const data = [
-              'BEGIN:VCALENDAR',
-              'VERSION:2.0',
-              'PRODID:-//FanCPA//Meeting//EN',
-              'BEGIN:VEVENT',
-              'SUMMARY:Meeting with ${pending.first_name} ${pending.last_name}',
-              'DESCRIPTION:${pending.purpose || 'Intro call'}',
-              'DTSTART:' + formatDate(new Date('${pending.slot_start}')),
-              'DTEND:' + formatDate(new Date('${pending.slot_end}')),
-              'LOCATION:${meetLink}',
-              'END:VEVENT',
-              'END:VCALENDAR'
-            ].join('\\r\\n');
-            const blob = new Blob([data], { type: 'text/calendar;charset=utf-8' });
-            const url = window.URL.createObjectURL(blob);
-            const a = document.createElement('a');
-            a.href = url;
-            a.download = 'meeting.ics';
-            document.body.appendChild(a);
-            a.click();
-            document.body.removeChild(a);
-            window.URL.revokeObjectURL(url);
-          })()" style="padding:12px 24px;background:white;border:1px solid #e2e8f0;border-radius:999px;text-decoration:none;color:#0f172a;font-weight:600;font-size:14px;cursor:pointer;">Download .ics</button>
+      htmlPage({
+        title: 'Meeting Confirmed',
+        body: `
+      <div style="max-width:640px;margin:40px auto;padding:32px;border:1px solid #e2e8f0;border-radius:24px;background:#fff;">
+        <!-- 1. Date/Time hero -->
+        <div style="text-align:center;margin-bottom:24px;">
+          <div style="display:inline-block;padding:6px 12px;background:#f0fdf4;border:1px solid #bbf7d0;border-radius:999px;font-size:12px;color:#166534;">Meeting Confirmed ✅</div>
+          <h1 style="font-family:'Playfair Display',serif;font-size:28px;font-weight:900;letter-spacing:-0.02em;margin:16px 0 8px;">${escapeHtml(dateTimeEt)}</h1>
+          <p style="color:#475569;line-height:1.6;">Hi ${escapeHtml(pending.first_name)}, your meeting is confirmed.<br/>We've emailed the details to ${escapeHtml(pending.email)}.</p>
         </div>
-        <p style="margin-top:16px;font-size:12px;color:#94a3b8;">Purpose included in calendar invite: ${pending.purpose || 'Intro call'} — Google event ${calendarEventId} source ${source}</p>
+
+        ${pending.purpose ? `<div style="margin-bottom:16px;background:#f8fafc;padding:12px;border-radius:8px;border:1px solid #e2e8f0;font-size:14px;"><strong>Purpose:</strong> ${escapeHtml(pending.purpose)}</div>` : ''}
+
+        <!-- 2. Upload documents — primary CTA per S3 -->
+        ${hasRealDrive ? `<div style="margin:24px 0;padding:16px;background:#f8fafc;border:1px solid #e2e8f0;border-radius:12px;text-align:center;">
+          <p style="font-weight:600;margin:0 0 12px;">Upload your documents for ${meetingYear}</p>
+          <p style="font-size:12px;color:#64748b;margin:0 0 12px;">Anything you add to this folder is visible to us before the meeting.</p>
+          <a href="${escapeHtml(String(driveLink))}" target="_blank" rel="noopener noreferrer" style="display:inline-block;padding:12px 24px;background:#0f172a;color:white;border-radius:999px;text-decoration:none;font-weight:600;font-size:14px;">Upload documents for ${meetingYear} →</a>
+        </div>` : ''}
+
+        <!-- 3. Join link -->
+        ${safeMeet ? `<div style="margin:16px 0;padding:12px;background:white;border:1px solid #e2e8f0;border-radius:8px;">
+          <p style="margin:0 0 8px;font-weight:600;">Join link</p>
+          <a href="${escapeHtml(safeMeet)}" target="_blank" rel="noopener noreferrer" style="color:#0f172a;text-decoration:underline;word-break:break-all;">Open Meet →</a>
+          <p style="font-size:12px;color:#64748b;margin:8px 0 0;">Add to your calendar from the invite in your inbox — no extra .ics needed.</p>
+        </div>` : `<div style="margin:16px 0;padding:12px;background:#fffbeb;border:1px solid #fde68a;border-radius:8px;font-size:13px;color:#92400e;">Meet link will be sent shortly — your slot is blocked.</div>`}
+
+        <!-- P0 #3 fix: GET no longer one-click cancel (interstitial prevents Safe Links/prefetcher). Explain two-step. -->
+        <p style="margin-top:16px;font-size:13px;color:#475569;">Need to cancel? You can cancel up to 24 hours before via your confirmation email or this link — you’ll confirm on the next page to prevent accidental clicks. <a href="${escapeHtml(cancelUrl)}" style="color:#dc2626;text-decoration:underline;">Cancel meeting</a>.</p>
+
+        <div style="margin-top:24px;display:flex;gap:12px;flex-wrap:wrap;justify-content:center;">
+          ${safeMeet ? `<a href="${escapeHtml(safeMeet)}" target="_blank" style="padding:12px 24px;background:white;border:1px solid #e2e8f0;border-radius:999px;text-decoration:none;color:#0f172a;font-weight:600;font-size:14px;">Open Meet</a>` : ''}
+          <a href="/" style="padding:12px 24px;background:white;border:1px solid #e2e8f0;border-radius:999px;text-decoration:none;color:#0f172a;font-weight:600;font-size:14px;">Back to home</a>
+        </div>
       </div>
       `,
+      }),
       { status: 200, headers: htmlHeaders }
     )
   } catch (e: any) {
     console.log(`!!! CONFIRM_EXCEPTION ${e?.message}`)
-    return new Response(`<h1>Confirm failed</h1><p>${e?.message || String(e)}</p>`, { status: 500, headers: htmlHeaders })
+    return new Response(htmlPage({ title: 'Confirm failed', body: `<div style="max-width:600px;margin:40px auto;padding:24px;"><h1>Something went wrong</h1><p>Please try again or contact us.</p><a href="/" style="display:inline-block;margin-top:16px;padding:10px 20px;background:#0f172a;color:white;border-radius:999px;text-decoration:none;">Back to home</a></div>` }), { status: 500, headers: htmlHeaders })
   }
 }

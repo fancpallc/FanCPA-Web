@@ -117,8 +117,8 @@ describe('DELETE /api/admin/bookings/:id', () => {
     await onRequestDelete({ request, env, params: { id: '123' } } as any)
 
     expect(deleteBookingEvent).toHaveBeenCalledTimes(2)
-    expect(deleteBookingEvent).toHaveBeenCalledWith(env, 'cal-id', 'booking-cal-id')
-    expect(deleteBookingEvent).toHaveBeenCalledWith(env, 'cal-id', 'personal-cal-id')
+    expect(deleteBookingEvent).toHaveBeenCalledWith(env, 'cal-id', 'booking-cal-id', expect.objectContaining({ shouldNotify: expect.any(Boolean) }))
+    expect(deleteBookingEvent).toHaveBeenCalledWith(env, 'cal-id', 'personal-cal-id', expect.objectContaining({ shouldNotify: expect.any(Boolean) }))
   })
 
   it('should return 502 when calendar delete fails and credentials exist', async () => {

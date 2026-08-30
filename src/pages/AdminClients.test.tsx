@@ -12,6 +12,10 @@ vi.mock('../lib/api', () => ({
   createManualBooking: vi.fn(),
   deleteBooking: vi.fn(),
   updateAdminClient: vi.fn(),
+  cancelAdminBooking: vi.fn(),
+  hideAdminBooking: vi.fn(),
+  unhideAdminBooking: vi.fn(),
+  rebookAdminBooking: vi.fn(),
 }))
 
 vi.mock('../hooks/useAdminAuth', () => ({
@@ -41,7 +45,7 @@ test('AdminClients calls grouped search with dates', async () => {
   fireEvent.click(screen.getByRole('button', { name: /^search$/i }))
 
   await waitFor(() => {
-    expect(api.searchAdminClientsGrouped).toHaveBeenCalledWith('test', { startDate: '2023-01-01', endDate: '2023-01-31' })
+    expect(api.searchAdminClientsGrouped).toHaveBeenCalledWith('test', { startDate: '2023-01-01', endDate: '2023-01-31', showHidden: false })
   })
 })
 
@@ -115,27 +119,23 @@ test('AdminClients select-all selects only upcoming confirmed, past meetings dis
     expect(screen.getAllByText('Future').length).toBeGreaterThanOrEqual(1)
   })
 
-  // Past checkbox should be disabled — prevents backend 400 that send-email.test verifies
-  // We now render desktop table + mobile stacked cards, so each booking appears twice (desktop+mobile)
+  // S8: past rows CAN be selected for hide, only hidden disabled; select-all only selects upcoming
   const checkboxes = screen.getAllByRole('checkbox')
   const selectAll = checkboxes.find((cb) => (cb as HTMLInputElement).getAttribute('data-testid') === 'select-all')
   expect(selectAll).toBeInTheDocument()
-  // Row checkboxes now have data-booking-id
   const getByBooking = (id: string) => screen.getAllByTestId(`meeting-${id}`)[0] as HTMLInputElement
   const pastCb = getByBooking('b-past')
   const futureCb = getByBooking('b-future')
   const future2Cb = getByBooking('b-future2')
-  expect(pastCb).toBeDisabled() // b-past disabled
-  expect(futureCb).not.toBeDisabled() // b-future enabled
-  expect(future2Cb).not.toBeDisabled() // b-future2 enabled
+  expect(pastCb).not.toBeDisabled() // b-past selectable for hide per S8
+  expect(futureCb).not.toBeDisabled()
+  expect(future2Cb).not.toBeDisabled()
 
-  // Also mobile duplicates should match disabled state
   const pastMobile = screen.getAllByTestId('meeting-b-past-mobile')[0] as HTMLInputElement
-  expect(pastMobile).toBeDisabled()
+  expect(pastMobile).not.toBeDisabled()
 
   fireEvent.click(selectAll!)
 
-  // After select-all, only upcoming should be ticked (both desktop and mobile should sync via state)
   await waitFor(() => {
     expect((getByBooking('b-past') as HTMLInputElement).checked).toBe(false)
     expect((getByBooking('b-future') as HTMLInputElement).checked).toBe(true)

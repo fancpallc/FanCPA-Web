@@ -98,13 +98,13 @@ export const onRequestPost = async ({ request, env }: { request: Request; env: a
     driveFolderUrl = yearFolders[0].url
   }
 
-  // F1: upcoming bookings with cancel links
+  // F1: upcoming bookings with cancel links — include grace + soft-delete filter
   const origin = new URL(request.url).origin
   const meetingsRaw = (await db
     .prepare(
       `SELECT id, slot_start, slot_end, time_zone, purpose, meet_link, cancel_token
        FROM bookings
-       WHERE contact_id = ? AND status = 'confirmed' AND datetime(slot_start) >= datetime('now')
+       WHERE contact_id = ? AND status = 'confirmed' AND (deleted_at IS NULL OR deleted_at = '') AND datetime(slot_start) >= datetime('now', '-60 seconds')
        ORDER BY slot_start ASC`
     )
     .bind(contact.id)

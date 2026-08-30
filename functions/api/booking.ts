@@ -211,9 +211,20 @@ export const onRequestPost: PagesFunction<Env> = async ({ request, env }) => {
       if (existing?.id) {
         contactId = existing.id
         console.log(`!!! CONTACT_EXISTS id=${contactId} updating`)
-        // Update first/last/phone
-        const updateStmt = db.prepare('UPDATE contacts SET first_name = ?1, last_name = ?2, phone = ?3, updated_at = datetime("now") WHERE id = ?4')
-        await updateStmt.bind(firstName, lastName, phone || null, contactId).run().catch(() => {})
+        // V7 fix: previously UPDATE with updated_at always threw (column missing) and .catch swallowed silently
+        // 0016 now adds updated_at; try with column, fallback without for old DBs, and log loudly
+        try {
+          const updateStmt = db.prepare('UPDATE contacts SET first_name = ?1, last_name = ?2, phone = ?3, updated_at = datetime("now") WHERE id = ?4')
+          await updateStmt.bind(firstName, lastName, phone || null, contactId).run()
+        } catch (e: any) {
+          console.log(`!!! CONTACT_UPDATE_WITH_UPDATED_AT_FAILED ${e?.message} — retry without timestamp`)
+          try {
+            const fallback = db.prepare('UPDATE contacts SET first_name = ?1, last_name = ?2, phone = ?3 WHERE id = ?4')
+            await fallback.bind(firstName, lastName, phone || null, contactId).run()
+          } catch (e2: any) {
+            console.log(`!!! CONTACT_UPDATE_FALLBACK_FAILED ${e2?.message}`)
+          }
+        }
       } else {
         // Insert new contact
         const newId = crypto.randomUUID().replace(/-/g, '').slice(0, 16)

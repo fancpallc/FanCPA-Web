@@ -10,6 +10,7 @@ export const onRequestGet: PagesFunction<Env> = async ({ request, env }) => {
   const qRaw = url.searchParams.get('q')?.trim() || ''
   const startDate = url.searchParams.get('start_date')?.trim() || ''
   const endDate = url.searchParams.get('end_date')?.trim() || ''
+  const showHidden = url.searchParams.get('showHidden') === 'true' || url.searchParams.get('show_hidden') === 'true'
 
   if (!qRaw && !startDate && !endDate) {
     return new Response(JSON.stringify({ results: [], clients: [] }), { headers: { 'Content-Type': 'application/json' } })
@@ -54,12 +55,13 @@ export const onRequestGet: PagesFunction<Env> = async ({ request, env }) => {
     contactBinds = [like]
   } else {
     // Date filter only, no q — return recent contacts with meetings in range
+    // S7 fix: include cancelled rows so client with only cancelled bookings doesn't vanish; also respect soft-delete unless showHidden
     contactQuery = `
       SELECT c.id as contact_id, c.first_name, c.last_name, c.email, c.phone,
              c.drive_folder_url, c.drive_folder_id, c.drive_is_manual
       FROM contacts c
       WHERE EXISTS (
-        SELECT 1 FROM bookings b2 WHERE b2.contact_id = c.id AND b2.status = 'confirmed'
+        SELECT 1 FROM bookings b2 WHERE b2.contact_id = c.id AND b2.status IN ('confirmed','cancelled') ${showHidden ? '' : `AND (b2.deleted_at IS NULL OR b2.deleted_at = '')`}
           ${startDate ? 'AND datetime(b2.slot_start) >= datetime(?1)' : ''}
           ${endDate ? `AND datetime(b2.slot_start) <= datetime(?${startDate ? 2 : 1})` : ''}
       )
@@ -100,10 +102,12 @@ export const onRequestGet: PagesFunction<Env> = async ({ request, env }) => {
   }
 
   // 3. Meetings — date filter narrows meetings only (M2 fix: client remains with empty list when outside range)
+  // S7 fix: include cancelled so admin sees them after client/admin cancel; respect soft-delete unless showHidden; S8 prep: include audit cols
   let meetings: any[] = []
   try {
     const placeholders = contactIds.map((_: string, i: number) => `?${i + 1}`).join(', ')
-    let meetingQuery = `SELECT contact_id, id as booking_id, calendar_event_id, meet_link, purpose, slot_start, slot_end, time_zone, status, cancel_token FROM bookings WHERE contact_id IN (${placeholders}) AND status = 'confirmed'`
+    const softDeleteClause = showHidden ? '' : ` AND (deleted_at IS NULL OR deleted_at = '')`
+    let meetingQuery = `SELECT contact_id, id as booking_id, calendar_event_id, meet_link, purpose, slot_start, slot_end, time_zone, status, cancel_token, deleted_at, cancelled_at, cancelled_by, deleted_reason FROM bookings WHERE contact_id IN (${placeholders}) AND status IN ('confirmed','cancelled')${softDeleteClause}`
     const meetingBinds: any[] = [...contactIds]
     let nextIdx = contactIds.length + 1
     if (startDate) {
@@ -119,8 +123,11 @@ export const onRequestGet: PagesFunction<Env> = async ({ request, env }) => {
     meetingQuery += ` ORDER BY slot_start DESC LIMIT 500`
     const meetingsRes = await db.prepare(meetingQuery).bind(...meetingBinds).all()
     meetings = meetingsRes?.results || []
-  } catch {
-    meetings = []
+  } catch (e: any) {
+    // P0 fix: previously swallowed errors (e.g., missing deleted_reason column) and returned empty meetings,
+    // making admin table uniformly blank with 200. Now fail loudly so missing column is visible.
+    console.log(`!!! SEARCH_MEETINGS_ERROR ${e?.message}`)
+    return new Response(JSON.stringify({ error: `Failed to load meetings: ${e?.message || String(e)}` }), { status: 500, headers: { 'Content-Type': 'application/json' } })
   }
 
   // Group by contact (M1 fix: no fan-out)

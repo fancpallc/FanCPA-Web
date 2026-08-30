@@ -26,9 +26,19 @@ export function BookingForm({ slot, onSuccess, onCancel, timeZone }: BookingForm
   const [warning, setWarning] = useState<string | null>(null)
   const [confirmIntent, setConfirmIntent] = useState(false)
   const [success, setSuccess] = useState<{ meetLink: string; dateTime: string; cancelUrl: string; source?: string; gcalError?: string; emailResult?: any; pending?: boolean; message?: string; purpose?: string | null } | null>(null)
-  const [pending, setPending] = useState<{ email: string; dateTime: string; purpose?: string | null; message: string; confirmUrl?: string; emailResult?: any } | null>(null)
+  const [pending, setPending] = useState<{
+    email: string
+    dateTime: string
+    purpose?: string | null
+    message: string
+    confirmUrl?: string
+    emailResult?: any
+    expiresAt?: string
+  } | null>(null)
   const [challengeFailed, setChallengeFailed] = useState(false)
   const [needsInteraction, setNeedsInteraction] = useState(false)
+  const warningRef = React.useRef<HTMLDivElement>(null)
+  const pendingRef = React.useRef<HTMLDivElement>(null)
 
   // Load Turnstile widget — real token for alpha/prod, fake stub for local/test (so TDD not blocked)
   // Store widgetId for reset
@@ -135,6 +145,19 @@ export function BookingForm({ slot, onSuccess, onCancel, timeZone }: BookingForm
     }
   }, [renderTurnstile])
 
+  // S1: when warning/error appears after submit, scroll it into view so visitor sees response near button
+  useEffect(() => {
+    if (warning) {
+      requestAnimationFrame(() => warningRef.current?.scrollIntoView({ behavior: 'smooth', block: 'nearest' }))
+    }
+  }, [warning])
+
+  useEffect(() => {
+    if (pending) {
+      requestAnimationFrame(() => pendingRef.current?.focus())
+    }
+  }, [pending])
+
   /**
    * Every problem at once. This used to return the first failure only, so submitting an
    * empty form said "First name is required", and the visitor had to submit three more
@@ -188,7 +211,9 @@ export function BookingForm({ slot, onSuccess, onCancel, timeZone }: BookingForm
       }
       // Double opt-in pending — show check email message per requirement
       if ((result as any).pending) {
-        debug(`!!! BOOKING_FORM_PENDING email=${(result as any).email} dateTime=${result.dateTime} purpose=${(result as any).purpose || 'none'} confirmUrl=${(result as any).confirmUrl || 'none'} emailSuccess=${result.emailResult?.success}`)
+        debug(
+          `!!! BOOKING_FORM_PENDING email=${(result as any).email} dateTime=${result.dateTime} purpose=${(result as any).purpose || 'none'} confirmUrl=${(result as any).confirmUrl || 'none'} emailSuccess=${result.emailResult?.success} expiresAt=${(result as any).expiresAt || 'none'}`
+        )
         setPending({
           email: (result as any).email || email,
           dateTime: (result as any).dateTime,
@@ -196,6 +221,7 @@ export function BookingForm({ slot, onSuccess, onCancel, timeZone }: BookingForm
           message: (result as any).message || `Check your email (${email}) to confirm`,
           confirmUrl: (result as any).confirmUrl,
           emailResult: (result as any).emailResult,
+          expiresAt: (result as any).expiresAt,
         })
         return result
       }
@@ -254,37 +280,70 @@ export function BookingForm({ slot, onSuccess, onCancel, timeZone }: BookingForm
   }
 
   if (pending) {
-    const isEmailFail = pending.emailResult && !pending.emailResult.success
+    const isEmailFail = !!(pending.emailResult && !pending.emailResult.success)
+    const expiresAtDate = pending.expiresAt ? new Date(pending.expiresAt) : null
+    const expiresText = expiresAtDate && !isNaN(expiresAtDate.getTime())
+      ? expiresAtDate.toLocaleString('en-US', { month: 'short', day: 'numeric', hour: 'numeric', minute: '2-digit', hour12: true, timeZoneName: 'short' })
+      : null
+
+    // P0 #1 + #2 fix: under double opt-in nothing booked until token click, so don't claim booked; production dead-end previously (confirmUrl only local)
+    if (isEmailFail) {
+      return (
+        <div ref={pendingRef as any} tabIndex={-1} className="card rounded-2xl p-6 bg-amber-50 border-amber-300 w-full max-w-xl mx-auto focus:outline-none" role="alert" aria-live="assertive">
+          <h3 className="font-bold text-lg mb-2">{BOOKING_MESSAGES.emailNotSent.heading}</h3>
+          <p className="text-sm mb-3">{BOOKING_MESSAGES.emailNotSent.detail}</p>
+          <p className="text-sm mb-2">We created a pending hold for <strong>{pending.email}</strong> at <strong>{pending.dateTime}</strong>, but the confirmation email didn’t go out — your time isn’t booked yet.</p>
+          {pending.purpose && <p className="text-sm mb-3">Purpose: {pending.purpose}</p>}
+          {pending.confirmUrl ? (
+            <div className="mt-3 p-3 bg-white border rounded-lg">
+              <p className="text-xs font-semibold mb-1">Use this link to confirm (email failed — local dev only):</p>
+              <a href={pending.confirmUrl} className="text-xs underline break-all" target="_blank" rel="noopener noreferrer">{pending.confirmUrl}</a>
+              <div className="mt-2">
+                <a href={pending.confirmUrl} className="inline-block px-4 py-2 bg-slate-900 text-white rounded-full text-xs font-semibold min-h-11">Confirm now →</a>
+              </div>
+            </div>
+          ) : (
+            <div className="mt-3 p-3 bg-white border rounded-lg">
+              <p className="text-xs font-semibold mb-1">What to do:</p>
+              <ul className="text-xs text-slate-600 list-disc ml-4 space-y-1">
+                <li>Check spam for “Confirm your meeting” — sender is {`bookings@yourdomain or your configured EMAIL_FROM`}.</li>
+                <li>Wait a minute and try again with the same or a different email (Gmail delivers more reliably than custom domains in test).</li>
+                <li>If it keeps failing, contact us via the contact section below — we can book you manually.</li>
+              </ul>
+            </div>
+          )}
+          {expiresText && <p className="text-xs text-slate-600 mt-3">Pending hold expires at {expiresText} (1 hour) — slot may become free again after.</p>}
+          <div className="flex gap-2 mt-4 flex-wrap">
+            <button onClick={() => { setPending(null); resetTurnstile(); }} className="px-6 py-3 border border-slate-500 rounded-full text-sm font-medium hover:bg-white min-h-11">
+              Typed the wrong email? Start over
+            </button>
+            <a href="#contact" className="px-6 py-3 bg-slate-900 text-white rounded-full text-sm font-semibold min-h-11 inline-flex items-center">Contact us</a>
+          </div>
+        </div>
+      )
+    }
+
+    // Success pending — email was sent
     return (
-      <div className="card rounded-2xl p-6 bg-blue-50 border-blue-300">
-        <h3 className="font-bold text-lg mb-2">Booking Requested</h3>
-        <p className="text-sm mb-2">{pending.message}</p>
-        <p className="text-sm mb-2">Email: <strong>{pending.email}</strong></p>
-        <p className="text-sm mb-2">Date: {pending.dateTime}</p>
-        {pending.purpose && <p className="text-sm mb-3">Purpose: <strong>{pending.purpose}</strong></p>}
+      <div ref={pendingRef as any} tabIndex={-1} className="card rounded-2xl p-6 bg-amber-50 border-amber-300 w-full max-w-xl mx-auto focus:outline-none">
+        <h3 className="font-bold text-xl mb-3">Almost done — check your email</h3>
+        <p className="text-base font-semibold mb-3">Your time isn't booked yet. We sent a link to {pending.email} — click it and the meeting is booked.</p>
+        <div className="bg-white border rounded-lg p-3 text-sm space-y-1">
+          <div><strong>{pending.dateTime}</strong></div>
+          {pending.purpose && <div className="text-slate-600">Purpose: {pending.purpose}</div>}
+          <div className="text-xs text-slate-500">Sent to {pending.email} — {expiresText ? `link expires at ${expiresText} (1 hour)` : 'link expires in 1 hour'}.</div>
+        </div>
         {pending.confirmUrl && (
           <div className="mt-3 p-3 bg-white border rounded-lg">
-            <p className="text-xs font-semibold mb-1">Confirm link (for testing when email fails):</p>
+            <p className="text-[11px] font-semibold mb-1 text-slate-500">Confirm link (local dev only):</p>
             <a href={pending.confirmUrl} className="text-xs underline break-all" target="_blank" rel="noopener noreferrer">{pending.confirmUrl}</a>
-            <div className="mt-2">
-              <a href={pending.confirmUrl} className="inline-block px-4 py-2 bg-black text-white rounded-full text-xs font-semibold">Confirm now →</a>
-            </div>
           </div>
         )}
-        <p className="text-xs text-gray-600 mt-3 mb-1">We sent you a confirmation link. Click it within 30 minutes and the meeting is booked.</p>
-        {isEmailFail && (
-          <div className="p-2 bg-amber-50 border border-amber-200 rounded-lg text-xs text-amber-800 mt-2">
-            <div className="font-semibold">⚠️ Email failed: {pending.emailResult?.error?.slice(0, 200)}</div>
-            <div className="mt-1">Use the confirmation link above to finish booking.</div>
-          </div>
-        )}
-        <p className="text-xs text-gray-500 mt-2">No email yet? Check your spam folder.</p>
-        <div className="flex gap-2 mt-4">
-          {onCancel && (
-            <button onClick={() => { setPending(null); resetTurnstile(); }} className="px-6 py-3 border border-slate-500 rounded-full text-sm font-medium hover:bg-white">
-              Back
-            </button>
-          )}
+        <p className="text-xs text-slate-500 mt-3">No email yet? Check your spam folder for “Confirm your meeting”.</p>
+        <div className="flex gap-2 mt-4 flex-wrap">
+          <button onClick={() => { setPending(null); resetTurnstile(); }} className="px-6 py-3 border border-slate-500 rounded-full text-sm font-medium hover:bg-white min-h-11">
+            Change details
+          </button>
         </div>
       </div>
     )
@@ -336,38 +395,6 @@ export function BookingForm({ slot, onSuccess, onCancel, timeZone }: BookingForm
         )}
       </div>
 
-      {warning && (
-        <div className="p-3 border border-amber-300 bg-amber-50 rounded-lg text-sm mb-4">
-          <div className="font-semibold">Confirm intent?</div>
-          <div>{warning}</div>
-          <div className="text-xs mt-1">You already have a booking this week. Confirm below if you'd like another.</div>
-          {!turnstileToken && (
-            <div className="text-[11px] text-amber-700 mt-1">Re-running the spam check…</div>
-          )}
-          <div className="flex gap-2 mt-2">
-            <button
-              type="button"
-              onClick={handleConfirmAndBookAgain}
-              disabled={loading || !turnstileToken}
-              className="px-4 py-2 bg-black text-white rounded-full text-xs font-semibold hover:bg-gray-800 disabled:opacity-50"
-            >
-              {loading ? 'Booking…' : 'Confirm and book again'}
-            </button>
-            <button type="button" onClick={() => { setWarning(null); setConfirmIntent(false); resetTurnstile(); }} className="px-3 py-2 border border-slate-500 rounded-full text-xs bg-white hover:bg-gray-50">
-              Cancel
-            </button>
-          </div>
-        </div>
-      )}
-
-      {error && (
-        // role="alert" so the failure is announced; ManageBookings already had one and
-        // this box did not, so screen-reader users got silence on a failed submit.
-        <div className="p-3 border border-red-300 bg-red-50 rounded-lg text-sm text-red-700 mb-4" role="alert">
-          {error}
-        </div>
-      )}
-
       <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
         <div>
           <label htmlFor="firstName" className="block text-xs font-semibold mb-1">First name *</label>
@@ -396,11 +423,6 @@ export function BookingForm({ slot, onSuccess, onCancel, timeZone }: BookingForm
 
       {/* Turnstile widget — invisible challenge on booking form */}
       <div className="mt-4">
-        {/* The challenge is invisible unless Cloudflare asks the visitor to act, so the
-            container stays hidden. Left visible it rendered Cloudflare's own "Unable to
-            connect to website / Troubleshoot" panel — vendor failure jargon as the first
-            thing a visitor reads, saying the same thing as our own message in a second
-            voice. `before-interactive-callback` reveals it if a real challenge appears. */}
         <div id="turnstile-widget" className={needsInteraction ? '' : 'hidden'} />
         {challengeFailed && (
           <div className="p-3 rounded-xl border border-amber-200 bg-amber-50 text-xs text-amber-800" role="alert">
@@ -410,21 +432,48 @@ export function BookingForm({ slot, onSuccess, onCancel, timeZone }: BookingForm
             </button>
           </div>
         )}
-        {/* Hidden input for token in tests */}
         <input type="hidden" value={turnstileToken} readOnly data-testid="turnstile-token" />
       </div>
+
+      {/* S1 fix: warning/error moved directly above submit button so visitor sees response after scrolling to bottom and pressing Book. Previously both were at top, off-screen after submit. */}
+      {warning && (
+        <div ref={warningRef as any} className="p-3 border border-amber-300 bg-amber-50 rounded-lg text-sm mt-4" role="alert">
+          <div className="font-semibold">Confirm intent?</div>
+          <div>{warning}</div>
+          <div className="text-xs mt-1">You already have a booking this week. Confirm below if you'd like another.</div>
+          {!turnstileToken && <div className="text-[11px] text-amber-700 mt-1">Re-running the spam check…</div>}
+          <div className="flex gap-2 mt-2">
+            <button
+              type="button"
+              onClick={handleConfirmAndBookAgain}
+              disabled={loading || !turnstileToken}
+              className="px-4 py-2 bg-black text-white rounded-full text-xs font-semibold hover:bg-gray-800 disabled:opacity-50 min-h-11"
+            >
+              {loading ? 'Booking…' : 'Confirm and book again'}
+            </button>
+            <button type="button" onClick={() => { setWarning(null); setConfirmIntent(false); resetTurnstile(); }} className="px-3 py-2 border border-slate-500 rounded-full text-xs bg-white hover:bg-gray-50 min-h-11">
+              Cancel
+            </button>
+          </div>
+        </div>
+      )}
+
+      {error && (
+        <div className="p-3 border border-red-300 bg-red-50 rounded-lg text-sm text-red-700 mt-4" role="alert">
+          {error}
+        </div>
+      )}
 
       <button
         type="submit"
         disabled={loading || !turnstileToken}
-        className="mt-6 w-full px-6 py-3 bg-black text-white rounded-full font-bold text-sm hover:bg-gray-800 disabled:opacity-50 disabled:cursor-not-allowed"
+        className="mt-6 w-full px-6 py-3 bg-black text-white rounded-full font-bold text-sm hover:bg-gray-800 disabled:opacity-50 disabled:cursor-not-allowed min-h-11"
       >
         {loading ? 'Booking…' : 'Book this time'}
       </button>
       {!turnstileToken && !loading && !challengeFailed && (
         <p className="mt-2 text-xs text-gray-500 text-center">Just finishing a quick spam check…</p>
       )}
-
     </form>
   )
 }

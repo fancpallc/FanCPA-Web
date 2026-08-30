@@ -218,6 +218,11 @@ export interface AdminClientRow {
   year_folder_url?: string
   drive_folder_url?: string
   drive_folder_id?: string
+  // S8 soft-delete audit
+  deleted_at?: string | null
+  cancelled_at?: string | null
+  cancelled_by?: string | null
+  deleted_reason?: string | null
 }
 
 export interface AdminClientCard {
@@ -258,12 +263,13 @@ export async function searchAdminClients(
 
 export async function searchAdminClientsGrouped(
   q: string,
-  opts?: { startDate?: string; endDate?: string },
+  opts?: { startDate?: string; endDate?: string; showHidden?: boolean },
   options: FetchOptions = {}
 ): Promise<AdminClientCard[]> {
   const params = new URLSearchParams({ q })
   if (opts?.startDate) params.set('start_date', opts.startDate)
   if (opts?.endDate) params.set('end_date', opts.endDate)
+  if (opts?.showHidden) params.set('showHidden', 'true')
   const { json } = await fetchJson(`/api/admin/clients/search?${params.toString()}`, { ...options })
   const data = json as any
   if (Array.isArray(data.clients) && data.clients.length > 0) return data.clients as AdminClientCard[]
@@ -363,16 +369,17 @@ export async function createManualBooking(body: any, options: FetchOptions = {})
 export async function deleteBooking(
   bookingId: string,
   cancelMeeting: boolean,
-  opts?: { notifyClient?: boolean } | boolean,
+  opts?: { notifyClient?: boolean; action?: 'hide' | 'cancel' } | boolean,
   options: FetchOptions = {}
 ): Promise<any> {
   // Back-compat: third arg can be notifyClient boolean or options object
   let notifyClient: boolean | undefined
+  let action: 'hide' | 'cancel' | undefined
   let fetchOpts: FetchOptions = options
-  if (typeof opts === 'object' && opts !== null && !Array.isArray(opts) && ('notifyClient' in opts || Object.keys(opts).length === 0)) {
-    // Actually this overload is ambiguous; handle as {notifyClient} when object has that key
-    if ('notifyClient' in (opts as any)) {
+  if (typeof opts === 'object' && opts !== null && !Array.isArray(opts)) {
+    if ('notifyClient' in (opts as any) || 'action' in (opts as any)) {
       notifyClient = (opts as any).notifyClient
+      action = (opts as any).action
       fetchOpts = options
     } else {
       fetchOpts = opts as FetchOptions
@@ -381,8 +388,41 @@ export async function deleteBooking(
     notifyClient = opts
   }
   let url = `/api/admin/bookings/${encodeURIComponent(bookingId)}?cancelMeeting=${cancelMeeting}`
+  if (action) url += `&action=${action}`
   if (notifyClient !== undefined) url += `&notifyClient=${notifyClient}`
   const { json } = await fetchJson(url, { timeoutMs: (fetchOpts as any).timeoutMs ?? 15000, ...(fetchOpts as any), method: 'DELETE' })
+  return json
+}
+
+export async function cancelAdminBooking(bookingId: string, notifyClient: boolean = false, options: FetchOptions = {}): Promise<any> {
+  const url = `/api/admin/bookings/${encodeURIComponent(bookingId)}?action=cancel&cancelMeeting=true&notifyClient=${notifyClient}`
+  const { json } = await fetchJson(url, { timeoutMs: (options as any).timeoutMs ?? 15000, ...(options as any), method: 'DELETE' })
+  return json
+}
+
+export async function hideAdminBooking(bookingId: string, options: FetchOptions = {}): Promise<any> {
+  const url = `/api/admin/bookings/${encodeURIComponent(bookingId)}?action=hide`
+  const { json } = await fetchJson(url, { timeoutMs: (options as any).timeoutMs ?? 15000, ...(options as any), method: 'DELETE' })
+  return json
+}
+
+export async function unhideAdminBooking(bookingId: string, options: FetchOptions = {}): Promise<any> {
+  const { json } = await fetchJson(`/api/admin/bookings/${encodeURIComponent(bookingId)}`, {
+    timeoutMs: (options as any).timeoutMs ?? 10000,
+    ...(options as any),
+    method: 'PATCH',
+    body: JSON.stringify({ action: 'unhide' }),
+  })
+  return json
+}
+
+export async function rebookAdminBooking(bookingId: string, overrides?: any, options: FetchOptions = {}): Promise<any> {
+  const { json } = await fetchJson(`/api/admin/bookings/${encodeURIComponent(bookingId)}`, {
+    timeoutMs: (options as any).timeoutMs ?? 20000,
+    ...(options as any),
+    method: 'PATCH',
+    body: JSON.stringify({ action: 'rebook', ...(overrides || {}) }),
+  })
   return json
 }
 

@@ -397,7 +397,10 @@ export interface CreateEventResult {
   error?: string
 }
 
-export async function deleteBookingEvent(env: any, eventId: string, calendarId: string): Promise<boolean> {
+export async function deleteBookingEvent(env: any, eventId: string, calendarId: string, opts?: { shouldNotify?: boolean }): Promise<boolean> {
+  // V6 fix: notify checkbox was a lie — always used sendUpdates=all. Now respect opts.shouldNotify, default true for backward compat
+  const shouldNotify = opts?.shouldNotify !== false
+  const sendUpdates = shouldNotify ? 'all' : 'none'
   // Nothing to delete for stubs — treat as success so admin DB cleanup can proceed
   if (!eventId || String(eventId).startsWith('stub-') || String(eventId).startsWith('missing-')) {
     console.log(`!!! DELETE_BOOKING_EVENT_SKIP_STUB eventId=${eventId}`)
@@ -415,7 +418,7 @@ export async function deleteBookingEvent(env: any, eventId: string, calendarId: 
       if (!accessToken) {
         console.log(`!!! DELETE_BOOKING_EVENT_OAUTH_NO_TOKEN error=${tokenErr}`)
       } else {
-        const res = await fetch(`https://www.googleapis.com/calendar/v3/calendars/${encodeURIComponent(calendarId)}/events/${encodeURIComponent(eventId)}?sendUpdates=all`, {
+        const res = await fetch(`https://www.googleapis.com/calendar/v3/calendars/${encodeURIComponent(calendarId)}/events/${encodeURIComponent(eventId)}?sendUpdates=${sendUpdates}`, {
           method: 'DELETE',
           headers: { Authorization: `Bearer ${accessToken}` },
         })
@@ -486,7 +489,7 @@ export async function deleteBookingEvent(env: any, eventId: string, calendarId: 
     const accessToken = tokenJson.access_token
     if (!accessToken) return false
 
-    const res = await fetch(`https://www.googleapis.com/calendar/v3/calendars/${encodeURIComponent(calendarId)}/events/${encodeURIComponent(eventId)}?sendUpdates=all`, {
+    const res = await fetch(`https://www.googleapis.com/calendar/v3/calendars/${encodeURIComponent(calendarId)}/events/${encodeURIComponent(eventId)}?sendUpdates=${sendUpdates}`, {
       method: 'DELETE',
       headers: { Authorization: `Bearer ${accessToken}` },
     })

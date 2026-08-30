@@ -39,12 +39,12 @@ export const onRequestPost: PagesFunction<Env> = async ({ request, env }) => {
   const contact = (await db.prepare('SELECT id, email, first_name, drive_folder_url FROM contacts WHERE id = ?').bind(contact_id).first()) as any
   if (!contact) return new Response(JSON.stringify({ error: 'Contact not found' }), { status: 404, headers: { 'Content-Type': 'application/json' } })
 
-  // Candidate: upcoming confirmed bookings
+  // Candidate: upcoming confirmed bookings — V10a fix: 60s grace to match UI isUpcomingConfirmed, plus soft-delete filter
   const allMeetingsRes = (await db
     .prepare(
       `SELECT id, slot_start, slot_end, time_zone, purpose, meet_link, cancel_token
        FROM bookings
-       WHERE contact_id = ? AND status = 'confirmed' AND datetime(slot_start) >= datetime('now')
+       WHERE contact_id = ? AND status = 'confirmed' AND (deleted_at IS NULL OR deleted_at = '') AND datetime(slot_start) >= datetime('now', '-60 seconds')
        ORDER BY slot_start ASC`
     )
     .bind(contact_id)

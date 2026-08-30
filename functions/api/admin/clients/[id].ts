@@ -75,8 +75,8 @@ export const onRequestPatch: PagesFunction<Env> = async ({ request, env, params 
       return new Response(JSON.stringify({ error: 'Contact not found' }), { status: 404, headers: { 'Content-Type': 'application/json' } })
     }
 
-    // B1-style fix: contacts has no updated_at column (0001 has created_at only, 0015 adds drive_folder_id/is_manual). Drop timestamp.
-    const sql = `UPDATE contacts SET ${updates.join(', ')} WHERE id = ?`
+    // 0016 adds updated_at to contacts (fixes V7); include it when available
+    const sql = `UPDATE contacts SET ${updates.join(', ')}, updated_at = datetime('now') WHERE id = ?`
     values.push(contact_id)
     await db.prepare(sql).bind(...values).run()
 

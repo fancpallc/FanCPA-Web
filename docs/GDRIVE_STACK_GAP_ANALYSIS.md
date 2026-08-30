@@ -816,3 +816,508 @@ confirm page), R5 (thread `time_zone` into the Calendar event), R7 (Drive quota 
 **Needs a decision before work starts**: R2 (copy alone, or copy + enforcement), R12 (admin card —
 already done — or the public portal email), and the R1 dead-panel bug (restore `pending: true`, or
 delete the unreachable panel).
+
+---
+
+# Rev 4 — requested changes, verified 2026-08-29
+
+Rev 3 (R1–R14) shipped and its suite is green (`docker compose --profile test run --rm tests` →
+lint ok, build ok, 92 frontend + 272 worker tests). This section is the next batch of requests,
+each checked against the working tree.
+
+Two of them turned out to share a single root cause that is bigger than either symptom (S-CSS),
+and one turned out to be a latent data-loss bug of exactly the same class as R13 (S7).
+
+| # | Ask | Verdict | Anchor |
+|---|---|---|---|
+| S1 | Move the confirm-intent box near "Book this time" | ✅ valid | `BookingForm.tsx:339`, submit at `:420` |
+| S2 | Booking-requested panel looks bad; reword | ✅ valid (it is not a modal) | `BookingForm.tsx:256-290` |
+| S3 | Confirm page carries too much information | ✅ valid — includes developer diagnostics | `booking/confirm/[token].ts:324-363` |
+| S4 | Cannot update the Drive link after clicking Edit | ✅ real — **caused by S6**, not by the handler | see S-CSS |
+| S5 | "GDrive:" → "Google Drive" | ✅ valid, 3 occurrences | `AdminClients.tsx:888,912,676` |
+| S6 | Save button is invisible | ✅ **confirmed — `bg-blue-600` does not exist in this project** | see S-CSS |
+| S7 | Client cancel deletes the row; should keep it as cancelled | ✅ **confirmed, and the cause is a missing column** | `cancel/[token].ts:224-230` |
+| S8 | Allow selecting past rows; tiered delete; soft delete | ✅ behaviour confirmed; design needs decisions | `AdminClients.tsx:980,1070`, `admin/bookings/[id].ts:110` |
+
+---
+
+## S-CSS. Root cause of S4 and S6: this project has no Tailwind
+
+This is the headline finding. **There is no Tailwind in the repo** — no `tailwindcss` dependency in
+`package.json`, no `tailwind.config.*`, no `@tailwind` directives. `src/index.css` is a hand-written
+678-line stylesheet that reimplements a *subset* of Tailwind's class names by hand.
+
+Any Tailwind-looking class not present in that file silently does nothing. There is no build error,
+no lint error, and no test failure — the class is just inert.
+
+Combined with the base rule at `src/index.css:55-62`:
+
+```css
+button {
+  background-color: transparent;
+  background-image: none;
+  border: 0;
+  padding: 0;
+  ...
+}
+```
+
+…a button styled `text-white bg-blue-600` renders as **white text on a transparent background**, i.e.
+invisible on the white card.
+
+Full inventory of background utilities that *do* exist:
+
+```
+bg-amber-100 bg-amber-50 bg-black bg-blue-50 bg-gray-100 bg-gray-200 bg-gray-300 bg-gray-400
+bg-gray-50 bg-green-200 bg-green-400 bg-green-50 bg-green-500 bg-green-600 bg-hero bg-orange-50
+bg-red-200 bg-red-50 bg-slate-100 bg-slate-200 bg-slate-50 bg-slate-900 bg-white
+```
+
+`bg-blue-600` and `bg-red-600` are **not** among them. Neither is `text-blue-600`.
+
+### Controls that are currently invisible or miscoloured
+
+| Control | File:line | Classes | Effect |
+|---|---|---|---|
+| Drive **Save** | `AdminClients.tsx:932` | `text-white bg-blue-600` | invisible → **this is S4** |
+| Drive **Edit / + Add Drive link** | `:902` | `text-white bg-blue-600` | invisible |
+| Client-name **Save** | `:826` | `bg-blue-600 text-white` | invisible |
+| Row **trash** icon (desktop) | `:1035` | `bg-red-600 text-white` + `fill="currentColor"` | invisible |
+| Row **trash** icon (mobile) | `:1098` | `bg-red-600 text-white` | invisible |
+| Modal **Delete** | `:722` | `bg-red-600 text-white` | invisible (pre-existing) |
+| Drive hyperlink, year-folder links, "Show more", name **Edit** | `:889,:767,:1000,:833` | `text-blue-600` | falls back to inherited slate; `underline` still applies, so still discoverable |
+
+Arbitrary-value classes are also inert (a hand-written sheet cannot generate them):
+`min-w-[280px]`, `max-w-[360px]`, `max-w-[280px]`, `text-[10px]`, `text-[11px]`, `w-[120px]`,
+`w-[140px]`, `mt-0.5`.
+
+### Proof that S4 is *only* the invisible button
+
+Six throwaway render tests were run against `AdminClients` in JSDOM (then deleted) covering: edit an
+existing link, add a link when none exists, replace a stub `fake-` link, two clients side by side, and
+the card re-render after save. **All six passed** — the Save button is in the DOM, the input is
+controlled correctly, `updateAdminDriveFolderClientLevel(contact_id, url)` is called with the right
+arguments, and the card shows the new link afterwards.
+
+JSDOM has no layout or CSS engine, which is exactly why the existing test suite is green while the
+button is unusable in a browser. The Edit→Save logic is correct; the admin simply cannot see the button
+to click it.
+
+Two theories were tested and **ruled out**:
+- *Route shadowing.* The new `functions/api/admin/clients/[id].ts` does not swallow
+  `PATCH /api/admin/clients/drive-folder`. Building the Functions worker shows the route table orders
+  `/api/admin/clients/drive-folder` before `/api/admin/clients/:id`, so the static route wins.
+- *Unapplied migration `0015`.* If `contacts.drive_folder_id` were missing, `search.ts:32` would 500 and
+  no clients would render at all. Clients render, so `0015` is applied.
+
+### Recommendation
+
+Fix the class inventory, not the individual buttons — otherwise every future component hits this again.
+Ranked:
+
+- **P0** — add the missing utilities to `src/index.css`: `bg-blue-600`, `bg-blue-700` (hover),
+  `bg-red-600`, `bg-red-700` (hover), `text-blue-600`. That alone fixes S4, S6 and the invisible trash
+  icons in one change.
+- **P1** — add the eight missing arbitrary-value classes as named utilities, or replace their usages
+  with classes that exist.
+- **P1** — add a guard so this cannot recur silently: a unit test (or a small script in the docker test
+  step) that extracts every `className` token from `src/**/*.tsx` and asserts each one resolves in
+  `src/index.css`. This is cheap and would have caught all of the above at commit time.
+- **P2** — decide whether to keep the hand-rolled shim or adopt real Tailwind. The shim has now produced
+  a user-visible outage twice; that is the actual argument for switching, but it is a separate piece of
+  work and should not block the P0.
+
+---
+
+## S1. Confirm-intent box sits far from the button that triggers it
+
+Valid as described.
+
+The duplicate-booking warning renders at `BookingForm.tsx:339-360`, immediately after the form header
+and **before** the first name field. The submit button it responds to — "Book this time" — is at
+`:420-427`, roughly 85 lines and five form controls below it.
+
+The sequence is: the visitor scrolls to the bottom, presses "Book this time", the request returns a
+`warning`, and the response — plus the "Confirm and book again" button they now need — appears above
+the fold, off-screen. Nothing scrolls it into view. To the visitor the button simply did nothing.
+
+Fix: move the `{warning && …}` block to sit directly above the submit button, after the Turnstile
+container at `:400-418`. Keep `role="alert"` semantics so it is announced, and consider
+`scrollIntoView({ block: 'nearest' })` when `warning` transitions from null.
+
+Note the same pattern applies to the `{error && …}` block at `:363-370` — it is also at the top and has
+the same problem after a failed submit. Worth moving both.
+
+---
+
+## S2. "Booking Requested" panel
+
+Valid. First, a correction to the framing: **it is not a modal.** It is the `if (pending)` early-return
+of `BookingForm` (`:256-290`), so it replaces the form in place inside `#slot-picker` on the home page.
+There is no overlay, no focus trap, and no focus move — a screen-reader or keyboard user gets no signal
+that the form they were filling in has been swapped out.
+
+Current reading order:
+
+1. "Booking Requested" (`:260`)
+2. `{pending.message}` — the API string "Confirmation email sent. Please click the link to finalize your booking." (`:261`)
+3. Email (`:262`)
+4. Date (`:263`)
+5. Purpose (`:264`)
+6. dev-only confirm-link box (`:265-273`, production-suppressed since R-fix #2)
+7. "We sent you a confirmation link. Click it within 30 minutes and the meeting is booked." (`:274`)
+8. email-failure warning (`:275-280`)
+9. "No email yet? Check your spam folder." (`:281`)
+10. "Back" (`:283-287`)
+
+Problems, in severity order:
+
+- **P0 — the critical fact is buried and duplicated.** The one thing the visitor must understand is
+  *this is not booked yet, go click the email*. It appears twice, at positions 2 and 7, in two different
+  voices, with the echoed form data in between. Items 2 and 7 say the same thing; one should go.
+- **P0 — the heading contradicts the body.** "Booking Requested" reads as a completed action. Nothing in
+  the heading says an action is still required.
+- **P1 — "Back" is ambiguous.** It clears `pending` and returns to the form with the same slot
+  (`:284`). A visitor reading "Back" after being told to check their email may take it as "cancel", or
+  may press it and re-submit, creating a second pending row for the same slot (which then trips the
+  duplicate-booking warning from S1 — the one they cannot see).
+- **P1 — the 30-minute expiry is stated once, in the smallest text, seventh.** It is the only
+  time-sensitive fact on the page.
+- **P2 — no resend affordance.** If the email does not arrive the visitor's only route is to start over.
+  There is no resend endpoint today; adding one is a backend change, so record it as a gap rather than a
+  copy fix.
+
+Requested wording is right in substance. Suggested copy, keeping the stakeholder's phrasing:
+
+- Heading: **"Almost done — check your email"**
+- Lead: **"Please click the link inside the email to finalize your booking. Your meeting is not booked until you do."**
+- Then: **"Sent to {email} — the link expires in 30 minutes."**
+- Then the slot and purpose as a quiet summary block.
+- Spam line: keep, unchanged.
+- Button: **"Change details"** rather than "Back".
+
+Note "the link inside email" → "the link inside **the** email" for grammar.
+
+---
+
+## S3. `/api/booking/confirm` page carries developer diagnostics
+
+Valid. The success HTML is `booking/confirm/[token].ts:324-363`. Triage:
+
+| Element | Line | Call |
+|---|---|---|
+| "Meeting Confirmed ✅" + greeting + formatted date | 327-328 | **KEEP** — the payload of the page |
+| Purpose box | 329 | **KEEP**, demote visually |
+| Meet link printed as a full raw URL | 330 | **DEMOTE** — label the link, don't print the URL; there is already an "Open Meet" button two lines below |
+| Drive upload folder | 331 | **KEEP** and promote — this is the only call to action that asks the client to do something |
+| `gcalError` raw string in a yellow box | 332 | **CUT** — this is the vendor's error text ("Bare event created without Meet — group calendar may not support hangoutsMeet via SA…"). `src/lib/bookingMessages.ts` exists precisely to stop this happening on the visitor-facing side; that lesson never reached this file |
+| Cancel URL printed in full as visible text | 333 | **DEMOTE** — a labelled link plus the 24-hour policy |
+| Open Meet / Back to home / Download .ics | 334-361 | **KEEP** two; **CUT** .ics — the client already has a real Google Calendar invite in their inbox, and a second competing calendar file invites double entries |
+| "Purpose included in calendar invite: … — Google event `abc123xyz` source `live`" | 362 | **CUT** — pure diagnostics. The event id and the literal word "stub"/"live" are meaningless to a client and undermine trust |
+
+Two further findings on this file:
+
+- **P0 (security) — user-controlled values are interpolated unescaped.** `pending.first_name` (`:328`),
+  `pending.purpose` (`:329`, `:362`) and `meetLink` (`:330`, `:334`) go straight into the HTML string.
+  `functions/_lib/email.ts:4` defines `escapeHtml` and the email templates all use it; this page does
+  not. Rev 3's L5 fix escaped the email templates and missed this page. Purpose is free text from a
+  public endpoint, capped at 2000 chars but not sanitised.
+- **P1 — the sibling error states share the problem.** The not-found (`:69-78`), expired (`:92-101`) and
+  already-confirmed (`:106-115`) responses print the raw token prefix and the raw `expires_at`
+  timestamp. Same page, same audience, same treatment needed.
+
+Information hierarchy for this moment: (1) it's confirmed, here's when; (2) upload your documents here;
+(3) join link; (4) how to cancel. Everything else belongs in the email or the logs.
+
+---
+
+## S4. Cannot update the Drive link after clicking Edit
+
+Real, and fully explained by **S-CSS** — the Save button is invisible. The Edit→Save logic itself is
+correct and proven by the six render tests described above. No separate fix is needed beyond adding
+`bg-blue-600` to `src/index.css`.
+
+---
+
+## S5. "GDrive" → "Google Drive"
+
+Valid. Three occurrences, all in `src/pages/AdminClients.tsx`:
+
+- `:888` — read-mode label `GDrive:`
+- `:912` — edit-mode label `GDrive:`
+- `:676` — Add Booking modal helper text, "GDrive auto generated based on email+year, Meet auto
+  generated from time" (also worth rewriting as a sentence: "The Google Drive folder and Meet link are
+  created automatically.")
+
+---
+
+## S6. Save button invisible
+
+Confirmed and root-caused in **S-CSS**. Not limited to Save — the Edit, "+ Add Drive link", client-name
+Save, both trash icons and the modal Delete button are all invisible for the same reason.
+
+---
+
+## S7. Client cancellation deletes the row — confirmed, and it is a missing column
+
+Valid, and the cause is not a design decision. The code already *intends* to do what is being asked
+for. `functions/api/cancel/[token].ts:222-231`:
+
+```ts
+// Mark as cancelled in D1 (or delete — we mark cancelled for audit)
+try {
+  const updateStmt = db.prepare('UPDATE bookings SET status = ?1, updated_at = datetime("now") WHERE id = ?2')
+  await updateStmt.bind('cancelled', booking.id).run()
+} catch {
+  try {
+    const delStmt = db.prepare('DELETE FROM bookings WHERE id = ?1')
+    await delStmt.bind(booking.id).run()
+  } catch {}
+}
+```
+
+**`bookings` has no `updated_at` column.** `migrations/0001_initial.sql:59-67` defines
+`id, contact_id, calendar_event_id, purpose, cancel_token, status, created_at`; `0007` adds
+`slot_start`/`slot_end`; `0014` adds `meet_link`/`time_zone`/`drive_folder_url`. No migration ever adds
+`updated_at`.
+
+Replayed against real SQLite built from those migrations:
+
+```
+UPDATE bookings SET status='cancelled', updated_at=datetime('now') WHERE id='b1';
+  -> Error: in prepare, no such column: updated_at
+```
+
+So the UPDATE throws on every single cancellation, the bare `catch` swallows it, and the fallback
+`DELETE FROM bookings` runs. The row is destroyed exactly as reported. This is the same defect class as
+R13 and B1 — a statement that only fails against a real database, invisible to mocked-D1 tests.
+
+Fixing it is two changes, and the second is easy to miss:
+
+- **P0** — drop `updated_at` from the UPDATE (nothing reads it), or add it in migration `0016`. Then
+  delete the `DELETE` fallback entirely: silently destroying a booking because an UPDATE failed is never
+  the behaviour you want, and it is what hid this bug.
+- **P0** — the row still will not appear in the admin table, because every consumer filters on
+  `status = 'confirmed'`:
+  - `admin/clients/search.ts:106` — the meetings query. Must include cancelled rows.
+  - `admin/clients/search.ts:62` — the `EXISTS` clause for the date-only search. A client whose only
+    bookings are cancelled currently disappears from search entirely.
+  - `admin/clients/send-email.ts:47` and `client-portal/lookup.ts:107` — these should **keep** filtering
+    to confirmed; a cancelled meeting must never be forwarded to a client.
+
+The UI half already works: `AdminClientRow` carries `status`, and the table renders a Status column at
+`AdminClients.tsx:1006`. It needs a chip style rather than raw text, and `isUpcomingConfirmed`
+(`:343-349`) already excludes cancelled rows from selection, which is correct.
+
+Also note `deleteCalendarEvent` is called *before* the DB write (`:218-220`), so the Google event is
+already gone by the time the row is destroyed — a cancelled booking cannot be restored to its original
+calendar event. See S8.
+
+---
+
+## S8. Selecting past rows, tiered delete, soft delete
+
+### Behaviour confirmed
+
+- **Past rows cannot be selected.** `disabled={!canSelect}` on both the desktop checkbox
+  (`AdminClients.tsx:980`) and the mobile one (`:1070`), where
+  `canSelect = isUpcomingConfirmed(r)` (`:343-349`). `toggleSelectAll` (`:351-364`) likewise only ever
+  selects upcoming rows.
+- **Admin delete is a hard delete.** `functions/api/admin/bookings/[id].ts:110` —
+  `DELETE FROM bookings WHERE id = ?`. There is no soft-delete column anywhere in the schema.
+- **The existing "Undo" is not an undo.** `handleDeleteBooking` (`:400-434`) restores by calling
+  `createManualBooking(...)`, which mints a **new booking id, a new Google Calendar event and a new
+  cancel token**, and re-runs the Drive folder logic. Any cancel link the client already holds is dead.
+- **The delete modal defaults** to `cancelMeetingChecked = true` and `notifyClientChecked = false`
+  (`:908-909`), so the current default is "kill the calendar event, tell the client nothing".
+
+So the description is accurate on every point.
+
+### Design assessment
+
+The proposal is sound in intent. Three tensions to resolve before building it:
+
+- **P0 — one checkbox column cannot mean two things.** Today ticking a row means "forward this meeting
+  to the client". The proposal adds "and also this is what I'm about to delete". Same control, one
+  benign meaning and one destructive one, with the destructive one newly enabled on rows that were
+  previously unselectable. That is how an admin emails a client about a meeting they meant to purge, or
+  purges one they meant to email. Recommended: keep one checkbox column, but make the *action bar* carry
+  the meaning — show "Send selected (n)" and "Delete selected (n)" side by side, with Send disabled when
+  the selection contains any non-upcoming row, and an explicit count breakdown ("3 selected — 2 past,
+  1 upcoming").
+- **P0 — "delete" and "cancel the meeting" must stay separate.** They have different blast radii:
+  removing a row from the admin's list is reversible bookkeeping; cancelling deletes a real Google
+  Calendar event off the client's calendar and (per the proposal) emails them. The tiering described —
+  past/cancelled delete directly, upcoming-confirmed prompts — is the right instinct. Make the prompt
+  state the consequence in the button, not just the checkbox: "Cancel meeting & notify client" vs
+  "Remove from list only".
+- **P1 — "revertible" cannot be honest about the calendar.** A cancelled Google event cannot be
+  un-cancelled. Restoring a soft-deleted booking that was also cancelled has to create a *new* event and
+  a *new* cancel token, which is what today's fake Undo already does badly. The UI must not promise
+  "Undo"; it should say "Restore" and warn that a new invitation will be sent. If the record was
+  soft-deleted *without* cancelling, restore is genuinely lossless — that distinction should be visible
+  in the restore dialog.
+
+### Data model implications
+
+- `ALTER TABLE bookings ADD COLUMN deleted_at TEXT` (null = visible) — soft delete.
+- `ALTER TABLE bookings ADD COLUMN deleted_reason TEXT` — distinguishes "removed from list" from
+  "cancelled by admin", which is what makes an honest restore possible.
+- The existing `status` CHECK constraint is `CHECK (status IN ('confirmed','cancelled'))`
+  (`0001_initial.sql:65`). Any new status value requires a table rebuild in SQLite — so prefer
+  `deleted_at` over adding a `'deleted'` status.
+- Every read path needs `AND deleted_at IS NULL` added: `search.ts` (both queries), `send-email.ts`,
+  `client-portal/lookup.ts`, `bookings/lookup.ts`.
+- A "Show hidden" toggle on the admin card is the minimum surface for restore; without it soft-deleted
+  rows are unreachable and the feature is indistinguishable from a hard delete.
+
+### Status chips
+
+With S7 fixed, the Status column carries real values. Suggested: `Upcoming` (slate), `Completed`
+(grey), `Cancelled` (red outline), `Hidden` (amber, only when "Show hidden" is on). Note `bg-red-600`
+does not exist — see S-CSS — so use the existing `bg-red-50`/`text-red-700` pair for the cancelled chip.
+
+---
+
+## Rev 4 — suggested sequencing
+
+**PR-11a — the CSS shim (unblocks S4 and S6, one file):** add `bg-blue-600`, `bg-blue-700`,
+`bg-red-600`, `bg-red-700`, `text-blue-600` and the eight arbitrary-value utilities to
+`src/index.css`, plus the className-resolves-to-CSS guard test. Nothing else in this batch should land
+before this, because the admin card is unusable without it.
+
+**PR-11b — data integrity (S7):** drop `updated_at` from the cancel UPDATE, delete the `DELETE`
+fallback, and let cancelled rows through `search.ts`. Add one real-SQLite test, as with B1.
+
+**PR-11c — copy and layout (S1, S2, S3, S5):** move the warning/error blocks next to the submit button,
+rewrite the pending panel, strip diagnostics from the confirm page and escape its interpolations,
+rename GDrive → Google Drive.
+
+**PR-11d — S8**, once the three decisions above are made. Largest of the four and the only one needing
+a migration.
+
+**Needs a decision:** whether "Back" on the pending panel becomes "Change details" or is removed
+entirely; whether to add a resend-confirmation endpoint (S2 P2); and whether the CSS shim is patched or
+replaced with real Tailwind (S-CSS P2).
+
+---
+
+# Rev 4 addendum — UX review findings, verified 2026-08-29
+
+Three independent design reviews were run against S2 (pending panel), S3 (confirm page) and S8
+(admin delete flow). They surfaced **ten defects that are not design opinions**. Each was
+re-verified against the source before being recorded here; every one is confirmed.
+
+The most important structural finding: **the CSS guard described in S-CSS used to exist.**
+`src/index.css:412-417` says:
+
+> *"Utility completion — every class name used in `src/**.tsx` must be defined here. This project has
+> no Tailwind build step, so undefined classes silently do nothing (that is what made hover-only
+> overlays render permanently and admin spacing collapse). `npm test` enforces coverage via
+> styles.coverage.test.ts."*
+
+**`styles.coverage.test.ts` does not exist anywhere in the repo.** So this exact failure mode has
+already caused two prior visible regressions, a guard was written, the guard was lost, and it has now
+caused a third (S4/S6). Restoring it is the single highest-leverage item in this document.
+
+## Verified defects
+
+| # | Defect | Evidence |
+|---|---|---|
+| V1 | **Pending panel states the wrong expiry.** Panel says "Click it within 30 minutes"; the token is valid for **one hour**. A visitor returning at 40 minutes believes they missed it and abandons a live booking. | `BookingForm.tsx:274` vs `booking.ts:243` (`60 * 60 * 1000`) |
+| V2 | **On email failure the panel still says the email was sent.** `pending.message` is hardcoded server-side and rendered unconditionally, ~15px above the box saying the send failed. | `booking.ts:298`, rendered `BookingForm.tsx:261`, failure box `:275-280` |
+| V3 | **The CSS coverage guard is claimed but absent.** See above. | `index.css:412-417`; no such file |
+| V4 | **Confirm page ships dead Meet links as live ones.** `createBookingEvent` never returns an empty `meetLink` — it coalesces to `https://meet.google.com/fake-no-meet-…`. So the page's `${meetLink \|\| 'No Meet link…'}` fallback is unreachable, and the client gets a real-looking 404 URL **plus** a large primary "Open Meet →" button pointing at it. | `google-calendar.ts:812`, `google-oauth.ts:223` vs `confirm/[token].ts:331,336` |
+| V5 | **The .ics button is inert for any client with an apostrophe.** `pending.first_name` / `last_name` / `purpose` are interpolated into a **single-quoted JS string inside an `onclick` attribute**. `O'Brien`, or a purpose of "I'm starting an LLC", terminates the string, the handler fails to parse, and the button silently does nothing. `escapeHtml` does **not** fix this — the HTML parser decodes `&#39;` back to `'` before JS sees it. Must move to a server endpoint. | `confirm/[token].ts:344-348` |
+| V6 | **The admin "Notify client by email?" checkbox is a lie.** `deleteBookingEvent` calls Google with `?sendUpdates=all` on both the OAuth and SA paths, so Google emails the attendee whenever the event is deleted — regardless of the checkbox. And "Cancel meeting and free calendar?" defaults **on** for every row including past ones, so tidying away last March's meeting tells that client their meeting is cancelled. | `google-calendar.ts:418,489`; defaults `AdminClients.tsx:908-909` |
+| V7 | **Third instance of the missing-`updated_at` bug, and this one is silent.** `booking.ts:215` runs `UPDATE contacts SET first_name…, updated_at = datetime("now")` with `.catch(() => {})` chained. `contacts` has no `updated_at`, so the statement always throws and is always swallowed — a returning client who changed their surname or phone never has it updated, with no log and no fallback. | `booking.ts:215-216` |
+| V8 | **More inert CSS beyond S-CSS.** `bg-black/50` is undefined, so **neither modal has a dimming scrim** — the Add Booking and Delete dialogs float on the live page. `disabled:opacity-40` is undefined, so disabled Send/email buttons do not dim (`disabled:opacity-50` exists and should be used). | `AdminClients.tsx:546,696` and `:856,1023,1024` |
+| V9 | **`bookingMessages.ts` is imported and unused in both consumers** while the thing it exists to prevent is happening. Its doc comment explains it was written so vendor error strings never reach visitors — and `BookingForm.tsx:277` renders `pending.emailResult?.error?.slice(0, 200)`, i.e. the raw Resend string (`Resend pending failed 422 {"statusCode":422,…}`). | `BookingForm.tsx:7`, `Home.tsx:18`; leak at `:277` |
+| V10 | **Admin table integrity nits.** (a) The UI's upcoming boundary allows 60s grace and keys off `slot_start`; `send-email.ts:47` has no grace — a row 0-60s past start is tickable and 400s on send. (b) `selected` is not pruned when a row is deleted, so "Send selected (n)" keeps counting a dead booking. (c) The Undo passes `sendEmail: false`, so a client just told their meeting is cancelled gets a silent new invite; its failure branch claims "Booking restored locally" when the booking is gone; and `lastDeleted` state is set and never read. | `AdminClients.tsx:387` vs `send-email.ts:47`; `:447-449`; `:459-482`, `:406,451` |
+
+## Design direction (from the reviews)
+
+**S2 — pending panel.** The load-bearing sentence is seventh in reading order, at the smallest size, in
+the second-lightest grey, beneath three rows echoing what the visitor typed thirty seconds ago. The
+heading "Booking Requested" reads as *submitted, they'll handle it* — and the success panel uses the
+identical heading with the opposite meaning. Recommended: heading **"Almost done — check your email"**;
+lead **"Your time isn't booked yet. We sent a link to {email} — click it and the meeting is booked."**
+as the largest body text; amber not blue (the codebase already uses amber for "you must act"); details
+collapsed from four rows to two; expiry as an absolute time from the `expiresAt` already returned but
+currently dropped client-side; spam line naming the searchable subject ("Confirm your meeting");
+**"Back" → "Typed the wrong email?" + "Start over"** (the current Back cancels nothing — the pending row
+and its live link survive); and a separate red `role="alert"` panel for the failure case instead of a
+contradiction box bolted onto a success panel. The panel also needs `w-full max-w-xl mx-auto` (it
+currently jumps wider than the form it replaces) and focus management (the form is destroyed in place
+with no announcement).
+
+**S3 — confirm page.** Correct hierarchy: (1) the date and time, as the visual hero; (2) upload your
+documents — the only action available now, currently fifth; (3) join link and add-to-calendar; (4) the
+cancellation policy as prose. The cancel URL, the full Meet URL and the purpose echo belong in the
+email, which is the durable artifact. Add "we've emailed the details to {email}" to close the loop.
+One dark pill on the page, and it should be the upload folder — not "Open Meet", which points at an
+empty room for days. Also: the page has no `<!doctype>`, no `lang`, no `<title>` and **no viewport
+meta**, so iOS Safari lays it out at 980px and shrinks it — it is currently not readable on a phone,
+which was a stated constraint. All four error states ship as naked `<h1>` fragments with no layout and
+no way back, and `DB not configured` names infrastructure to a stranger.
+
+**S8 — admin delete.** The reviewer rejected the fused delete/cancel control and proposed disjoint row
+sets instead, which resolves the checkbox collision without a second checkbox column:
+
+- **Upcoming confirmed rows have no delete.** Their action is **Cancel meeting** — deletes the event,
+  optionally emails, sets `status='cancelled'`, and the row *stays visible* with a Cancelled chip.
+- **Cancelled and past rows have no cancel.** Their action is **Hide** — soft delete, no calendar, no
+  email, reversible.
+
+To remove a meeting you cancel it, then hide it: two deliberate steps, each with one consequence.
+Never use the word "delete" in the UI; say **Hide** / **Show hidden** so it reads as a filter. Ship no
+permanent delete in v1. Two orthogonal axes, never mixed in copy: *what happened to the meeting*
+(Upcoming / Completed / Cancelled) is the status chip; *whether the row is in the list* (Hidden) is the
+admin's view. Bulk actions are **Email** and **Hide** only — never bulk cancel. Only Hide gets an Undo,
+because it is the only genuinely reversible action; cancelled rows get **Rebook**, honestly labelled,
+with a dialog stating that the original event cannot be brought back.
+
+This design needs **no new `status` value**, so the `CHECK (status IN ('confirmed','cancelled'))`
+constraint at `0001_initial.sql:65` is untouched and no SQLite table rebuild is required — the reason to
+prefer `deleted_at` over a `'deleted'` status. Suggested additive migration `0016`:
+
+```sql
+ALTER TABLE bookings ADD COLUMN updated_at TEXT;      -- fixes S7's silent hard delete
+ALTER TABLE bookings ADD COLUMN deleted_at TEXT;      -- list visibility
+ALTER TABLE bookings ADD COLUMN cancelled_at TEXT;
+ALTER TABLE bookings ADD COLUMN cancelled_by TEXT;    -- 'client' | 'admin', no CHECK
+ALTER TABLE bookings ADD COLUMN cancel_notified INTEGER DEFAULT 0;
+CREATE INDEX IF NOT EXISTS idx_bookings_deleted_at ON bookings(deleted_at);
+```
+
+Rebook should reuse the existing row **and its `cancel_token`** — there is no reason to mint a new one,
+and keeping it means the client's existing cancel link still works, narrowing the breakage to the
+calendar invite alone. Today's re-create Undo structurally cannot do this, because the manual-booking
+endpoint always creates a new row with a new token, which is why every cancel link the client already
+holds goes dead.
+
+Row icon buttons are `w-8 h-8` (32px) on exactly the destructive controls; `w-11`/`h-11` both exist in
+the shim, so raising them to the 44px floor is free. Desktop and mobile renderers have already drifted
+(the same control carries different labels) — derive the per-row action set from one shared helper
+before adding three more conditional actions.
+
+## Revised Rev 4 sequencing
+
+**PR-11a — the CSS shim.** Now also covers `bg-black/50` (no modal scrim today) and
+`disabled:opacity-40`, and its most valuable deliverable is **restoring `styles.coverage.test.ts`**,
+which `index.css:412` already claims exists. Everything else waits on this.
+
+**PR-11b — data integrity.** S7's cancel-path hard delete, V7's silent contact-update failure, and the
+`updated_at` column they both need. One real-SQLite test, as with B1.
+
+**PR-11c — client-facing correctness.** V1 (wrong expiry), V2 (false success on email failure), V4
+(dead Meet links presented as live), V5 (.ics broken by apostrophes), plus the viewport meta on the
+confirm page. These are the four that cost bookings.
+
+**PR-11d — copy and layout.** S1, S2, S3, S5 as designed above.
+
+**PR-11e — S8.** Largest; needs migration `0016` and the three decisions in S8.
+
+**V6 needs a decision now, ahead of any of it:** the admin's "Notify client by email?" checkbox does not
+control whether the client is emailed. Either drop `sendUpdates=all` when the box is unchecked, or
+relabel the checkbox to describe what it actually does.
