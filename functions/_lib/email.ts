@@ -1,5 +1,15 @@
 import { getResendApiKey } from './env'
 
+// L5: escape user-controlled fields that end up in HTML — self-injection only today, but prevents future XSS
+function escapeHtml(str: string): string {
+  return String(str ?? '')
+    .replace(/&/g, '&amp;')
+    .replace(/</g, '&lt;')
+    .replace(/>/g, '&gt;')
+    .replace(/"/g, '&quot;')
+    .replace(/'/g, '&#39;')
+}
+
 export interface EmailEnv {
   RESEND_API_KEY?: string
   EMAIL_FROM?: string
@@ -17,6 +27,7 @@ export interface SendEmailParams {
   dateTime: string
   purpose?: string
   driveFolderUrl?: string
+  driveLink?: string
   driveYear?: number
   env: EmailEnv
 }
@@ -27,6 +38,40 @@ export interface SendEmailResult {
   source: 'live' | 'stub'
   error?: string
 }
+
+// Rev2 shared meeting shape
+export interface EmailMeeting {
+  dateTime: string // pre-formatted in client time_zone by caller
+  timeZone?: string
+  purpose?: string
+  meetLink?: string | null // null for legacy rows
+  cancelUrl?: string
+}
+
+export function renderMeetingRows(meetings: EmailMeeting[]): string {
+  if (!meetings.length) return '<p style="color:#64748b;">No upcoming meetings.</p>'
+  return `
+    <table style="width:100%;border-collapse:collapse;margin:12px 0;">
+      <thead><tr style="text-align:left;font-size:12px;color:#64748b;border-bottom:1px solid #e2e8f0;">
+        <th style="padding:6px;">Date &amp; Time</th><th style="padding:6px;">Purpose</th><th style="padding:6px;">Join</th><th style="padding:6px;">Cancel</th>
+      </tr></thead>
+      <tbody>
+        ${meetings
+          .map(
+            (m) => `
+          <tr style="border-bottom:1px solid #f1f5f9;font-size:13px;">
+            <td style="padding:8px 6px;">${escapeHtml(m.dateTime)}${m.timeZone ? ` <span style="color:#94a3b8;">${escapeHtml(m.timeZone)}</span>` : ''}</td>
+            <td style="padding:8px 6px;">${escapeHtml(m.purpose || '')}</td>
+            <td style="padding:8px 6px;">${m.meetLink ? `<a href="${m.meetLink}">${escapeHtml(m.meetLink.slice(0, 32))}…</a>` : '<span style="color:#94a3b8;">Not recorded</span>'}</td>
+            <td style="padding:8px 6px;">${m.cancelUrl ? `<a href="${m.cancelUrl}" style="color:#dc2626;">Cancel</a>` : ''}</td>
+          </tr>`
+          )
+          .join('')}
+      </tbody>
+    </table>
+  `.trim()
+}
+
 export function buildConfirmationEmail(params: {
   firstName: string
   lastName: string
@@ -36,22 +81,23 @@ export function buildConfirmationEmail(params: {
   dateTime: string
   purpose?: string
   driveFolderUrl?: string
+  driveLink?: string
   driveYear?: number
   env?: any
 }): string {
-  const { firstName, lastName, email, meetLink, cancelUrl, dateTime, purpose, driveFolderUrl, driveYear } = params
-
-  // No calendar IDs leaked — only email/purpose/meetLink/cancelUrl/dateTime per requirement
+  // Backward compat: driveLink alias for driveFolderUrl
+  const driveUrl = params.driveFolderUrl || params.driveLink
+  const { firstName, lastName, email, meetLink, cancelUrl, dateTime, purpose, driveYear } = params as any
   return `
     <div style="font-family: sans-serif; max-width: 600px; margin: 0 auto;">
-      <h2>Meeting Confirmed — ${dateTime}</h2>
-      <p>Hi ${firstName} ${lastName || ''},</p>
-      <p>Your meeting is confirmed for <strong>${dateTime}</strong>.</p>
-      ${purpose ? `<p><strong>Purpose:</strong> ${purpose}</p>` : ''}
-      <p><strong>Email:</strong> ${email}</p>
-      ${meetLink ? `<p>Meet link: <a href="${meetLink}">${meetLink}</a></p>` : ''}
-      ${driveFolderUrl ? `<p>Drive folder${driveYear ? ` (${driveYear})` : ''}: <a href="${driveFolderUrl}">${driveFolderUrl}</a></p>` : ''}
-      ${cancelUrl ? `<p>Cancel link: <a href="${cancelUrl}">${cancelUrl}</a></p>` : ''}
+      <h2>Meeting Confirmed — ${escapeHtml(dateTime)}</h2>
+      <p>Hi ${escapeHtml(firstName)} ${escapeHtml(lastName || '')},</p>
+      <p>Your meeting is confirmed for <strong>${escapeHtml(dateTime)}</strong>.</p>
+      ${purpose ? `<p><strong>Purpose:</strong> ${escapeHtml(purpose)}</p>` : ''}
+      <p><strong>Email:</strong> ${escapeHtml(email)}</p>
+      ${meetLink ? `<p>Meet link: <a href="${meetLink}">${escapeHtml(meetLink)}</a></p>` : ''}
+      ${driveUrl ? `<p>Drive folder${driveYear ? ` (${driveYear})` : ''}: <a href="${driveUrl}">${escapeHtml(driveUrl)}</a></p>` : ''}
+      ${cancelUrl ? `<p>Cancel link (cancel 24 hours prior): <a href="${cancelUrl}">${escapeHtml(cancelUrl)}</a></p>` : ''}
       <p>Google Calendar invite also sent with Meet join button + description containing Meet link. Purpose included in invite.</p>
       <p>Thanks!</p>
     </div>
@@ -70,16 +116,16 @@ export function buildPendingConfirmEmail(params: {
   const { firstName, lastName, email, confirmUrl, dateTime, purpose } = params
   return `
     <div style="font-family: sans-serif; max-width: 600px; margin: 0 auto; padding: 24px; border: 1px solid #e2e8f0; border-radius: 16px;">
-      <h2 style="font-family: Playfair Display, serif; font-size: 24px; font-weight: 900;">Confirm your meeting — ${dateTime}</h2>
-      <p>Hi ${firstName} ${lastName || ''},</p>
-      <p>You requested a meeting for <strong>${dateTime}</strong>.</p>
-      ${purpose ? `<p style="background:#f8fafc; padding:12px; border-radius:8px; border:1px solid #e2e8f0;"><strong>Purpose:</strong> ${purpose}</p>` : ''}
-      <p><strong>Email:</strong> ${email}</p>
+      <h2 style="font-family: Playfair Display, serif; font-size: 24px; font-weight: 900;">Confirm your meeting — ${escapeHtml(dateTime)}</h2>
+      <p>Hi ${escapeHtml(firstName)} ${escapeHtml(lastName || '')},</p>
+      <p>You requested a meeting for <strong>${escapeHtml(dateTime)}</strong>.</p>
+      ${purpose ? `<p style="background:#f8fafc; padding:12px; border-radius:8px; border:1px solid #e2e8f0;"><strong>Purpose:</strong> ${escapeHtml(purpose)}</p>` : ''}
+      <p><strong>Email:</strong> ${escapeHtml(email)}</p>
       <p>Please confirm your email to schedule the meeting. We'll create the Google Calendar invite with Meet link and purpose after confirmation.</p>
       <div style="margin: 24px 0;">
         <a href="${confirmUrl}" style="display:inline-block; padding:12px 24px; background:#0f172a; color:white; border-radius:999px; text-decoration:none; font-weight:600; font-size:14px;">Confirm meeting →</a>
       </div>
-      <p style="font-size:12px; color:#94a3b8;">Purpose will be included in calendar invite: ${purpose || 'Intro call'}</p>
+      <p style="font-size:12px; color:#94a3b8;">Purpose will be included in calendar invite: ${escapeHtml(purpose || 'Intro call')}</p>
     </div>
   `.trim()
 }
@@ -144,14 +190,13 @@ export async function sendPendingConfirmEmail(params: PendingEmailParams): Promi
 }
 
 export async function sendConfirmationEmail(params: SendEmailParams): Promise<SendEmailResult> {
-  const { to, firstName, lastName, meetLink, cancelUrl, dateTime, purpose, driveFolderUrl, driveYear, env } = params
-
+  const { to, firstName, lastName, meetLink, cancelUrl, dateTime, purpose, driveFolderUrl, driveLink, driveYear, env } = params
+  const driveUrl = driveFolderUrl || driveLink
   const from = env?.EMAIL_FROM || env?.FROM || 'onboarding@resend.dev'
   const apiKey = getResendApiKey(env) || env?.RESEND_API_KEY
 
   console.log(`!!! EMAIL_START to=${to} from=${from} hasKey=${!!apiKey} env=${env?.ENVIRONMENT} meetLink=${meetLink} dateTime=${dateTime} purpose=${purpose || 'none'}`)
 
-  // Stub when key missing — return mock success and log (test env with key should still call fetch via mocked global.fetch)
   if (!apiKey) {
     console.log(`!!! EMAIL_STUB no key To=${to} Meet=${meetLink} Cancel=${cancelUrl} Date=${dateTime} Purpose=${purpose} — RESEND_API_KEY missing, checked aliases`)
     return { success: true, id: 'mock-id', source: 'stub', error: 'RESEND_API_KEY missing' }
@@ -159,7 +204,7 @@ export async function sendConfirmationEmail(params: SendEmailParams): Promise<Se
 
   try {
     const subject = getSubject(env, dateTime)
-    const html = buildConfirmationEmail({ firstName, lastName, email: to, meetLink, cancelUrl, dateTime, purpose, driveFolderUrl, driveYear, env })
+    const html = buildConfirmationEmail({ firstName, lastName, email: to, meetLink, cancelUrl, dateTime, purpose, driveFolderUrl: driveUrl, driveYear, env })
     console.log(`!!! EMAIL_BUILD_SUBJECT subject=${subject} from=${from}`)
 
     const res = await fetch('https://api.resend.com/emails', {
@@ -168,12 +213,7 @@ export async function sendConfirmationEmail(params: SendEmailParams): Promise<Se
         'Content-Type': 'application/json',
         Authorization: `Bearer ${apiKey}`,
       },
-      body: JSON.stringify({
-        from,
-        to,
-        subject,
-        html,
-      }),
+      body: JSON.stringify({ from, to, subject, html }),
     })
 
     console.log(`!!! EMAIL_FETCH_RESPONSE status=${res.status} ok=${res.ok}`)
@@ -183,8 +223,6 @@ export async function sendConfirmationEmail(params: SendEmailParams): Promise<Se
       const msg = `Resend failed ${res.status} ${text}`
       console.log(`!!! EMAIL_FAILED ${msg} To=${to} From=${from} Env=${env?.ENVIRONMENT}`)
       console.error(`[Email live FAILED] ${msg} — To: ${to}, From: ${from}, Env: ${env?.ENVIRONMENT}`)
-      // For Resend test mode onboarding@resend.dev only to verified email, this will be 403
-      // Return error but mark success false for diagnostics, caller will include emailError
       return { success: false, id: undefined, source: 'live', error: msg }
     }
 
@@ -195,7 +233,6 @@ export async function sendConfirmationEmail(params: SendEmailParams): Promise<Se
     const errMsg = e?.message || String(e)
     console.log(`!!! EMAIL_EXCEPTION Error=${errMsg} To=${to} Meet=${meetLink} Env=${env?.ENVIRONMENT}`)
     console.error(`[Email exception] Error: ${errMsg}, To: ${to}, Meet: ${meetLink}, Env: ${env?.ENVIRONMENT}`)
-    // In local/test, fallback to stub success for resilience; in alpha/prod, return live error so caller can surface
     if (env?.ENVIRONMENT === 'local' || env?.ENVIRONMENT === 'test') {
       return { success: true, id: 'mock-id-fallback', source: 'stub', error: errMsg }
     }
@@ -203,77 +240,143 @@ export async function sendConfirmationEmail(params: SendEmailParams): Promise<Se
   }
 }
 
+// ---- Rev2: portal + admin + cancelled templates ----
 
 export function buildClientPortalDriveEmail(params: {
   firstName: string
-  driveLinks: { year: number; url: string }[]
+  lastName?: string
+  email?: string
+  phone?: string
+  driveFolderUrl?: string
+  yearFolders?: { year: number; url: string }[]
+  driveLinks?: { year: number; url: string }[] // legacy backward compat
+  meetings?: EmailMeeting[]
 }): string {
-  const { firstName, driveLinks } = params
+  const { firstName, lastName, email, phone } = params as any
+  const driveFolderUrl = (params as any).driveFolderUrl
+  const yearFolders = params.yearFolders || params.driveLinks || []
+  const meetings = params.meetings || []
+
+  const folderSection = driveFolderUrl && String(driveFolderUrl).startsWith('https://')
+    ? `<p>Your documents folder: <a href="${driveFolderUrl}">${escapeHtml(driveFolderUrl)}</a></p>`
+    : ''
+  const yearSection = yearFolders.length
+    ? `<ul>${yearFolders.map((l) => `<li><strong>${l.year}:</strong> <a href="${l.url}">${escapeHtml(l.url)}</a></li>`).join('')}</ul>`
+    : !driveFolderUrl
+      ? '<p style="color:#64748b;">Your folder will be created with your first booking.</p>'
+      : ''
+
+  const meetingsSection = meetings.length
+    ? `<h3>Your upcoming meetings</h3>${renderMeetingRows(meetings)}`
+    : '<p style="color:#64748b;">No upcoming meetings.</p>'
+
+  const fullName = [firstName, lastName].filter(Boolean).join(' ')
+  const contactDetails = [
+    email ? `Email: ${escapeHtml(email)}` : '',
+    phone ? `Phone: ${escapeHtml(phone)}` : '',
+  ].filter(Boolean).join(' · ')
+
   return `
     <div style="font-family: sans-serif; max-width: 600px; margin: 0 auto;">
-      <h2>Your Client Portal Folders</h2>
-      <p>Hi ${firstName},</p>
-      <p>Here are your shared Drive folders:</p>
-      <ul>
-        ${driveLinks.map(link => `<li><strong>${link.year}:</strong> <a href="${link.url}">${link.url}</a></li>`).join('')}
-      </ul>
+      <h2>Your Client Portal</h2>
+      <p>Hi ${escapeHtml(firstName)},</p>
+      ${fullName ? `<p><strong>${escapeHtml(fullName)}</strong>${contactDetails ? ` · ${contactDetails}` : ''}</p>` : contactDetails ? `<p>${contactDetails}</p>` : ''}
+      ${folderSection}
+      ${yearSection}
+      ${meetingsSection}
     </div>
   `.trim()
 }
 
 export function buildAdminDriveEmail(params: {
   firstName: string
-  driveLink: string
-  meetings: string[]
+  driveLink: string | null
+  meetings: EmailMeeting[]
 }): string {
   const { firstName, driveLink, meetings } = params
+  // M1 fix: sentinel string must never be used as href — only render link if valid https URL
+  const safeLink = driveLink && typeof driveLink === 'string' && driveLink.startsWith('https://') ? driveLink : null
+  const folderSection = safeLink ? `<p>Folder: <a href="${safeLink}">${escapeHtml(safeLink)}</a></p>` : '<p>Folder: <span style="color:#64748b;">No folder found yet</span></p>'
   return `
     <div style="font-family: sans-serif; max-width: 600px; margin: 0 auto;">
-      <h2>Admin Drive Update</h2>
-      <p>Client: ${firstName}</p>
-      <p>Folder: <a href="${driveLink}">${driveLink}</a></p>
-      <p>Meetings: ${meetings.join(', ')}</p>
+      <h2>Your documents &amp; upcoming meetings</h2>
+      <p>Hi ${escapeHtml(firstName)},</p>
+      ${folderSection}
+      ${meetings.length ? renderMeetingRows(meetings) : '<p style="color:#64748b;">No upcoming meetings selected.</p>'}
     </div>
   `.trim()
+}
+
+export function buildBookingCancelledEmail(params: {
+  firstName: string
+  dateTime: string
+  purpose?: string
+  driveFolderUrl?: string
+}): string {
+  const { firstName, dateTime, purpose, driveFolderUrl } = params
+  return `
+    <div style="font-family: sans-serif; max-width: 600px; margin: 0 auto;">
+      <h2>Meeting cancelled — ${escapeHtml(dateTime)}</h2>
+      <p>Hi ${escapeHtml(firstName)},</p>
+      <p>Your meeting${purpose ? ` <strong>${escapeHtml(purpose)}</strong>` : ''} scheduled for <strong>${escapeHtml(dateTime)}</strong> has been cancelled.</p>
+      <p>No action is needed on your part.</p>
+      ${driveFolderUrl && String(driveFolderUrl).startsWith('https://') ? `<p>Your documents folder is unchanged and still accessible: <a href="${driveFolderUrl}">${escapeHtml(driveFolderUrl)}</a></p>` : '<p>Your documents folder, if any, is unchanged.</p>'}
+      <p>If this was unexpected, please reply to this email or book a new time.</p>
+    </div>
+  `.trim()
+}
+
+function resendFrom(env: EmailEnv): string {
+  return env?.EMAIL_FROM || (env as any)?.FROM || 'onboarding@resend.dev'
+}
+function resendKey(env: EmailEnv): string | undefined {
+  return getResendApiKey(env) || env?.RESEND_API_KEY
 }
 
 export async function sendClientPortalDriveEmail(params: {
   to: string
   firstName: string
-  driveLinks: { year: number; url: string }[]
+  lastName?: string
+  email?: string
+  phone?: string
+  driveFolderUrl?: string
+  yearFolders?: { year: number; url: string }[]
+  driveLinks?: { year: number; url: string }[] // legacy compat
+  meetings?: EmailMeeting[]
   env: EmailEnv
 }): Promise<SendEmailResult> {
-  const { to, firstName, driveLinks, env } = params
-  const from = env?.EMAIL_FROM || env?.FROM || 'onboarding@resend.dev'
-  const apiKey = getResendApiKey(env) || env?.RESEND_API_KEY
-  
+  const { to, firstName, lastName, email, phone, env } = params as any
+  const driveFolderUrl = (params as any).driveFolderUrl
+  const yearFolders = params.yearFolders || params.driveLinks || []
+  const meetings = params.meetings || []
+  const from = resendFrom(env)
+  const apiKey = resendKey(env)
 
-  console.log(`!!! CLIENT_PORTAL_DRIVE_EMAIL_START to=${to} hasKey=${!!apiKey} env=${env?.ENVIRONMENT}`)
   if (!apiKey) {
-    console.log(`!!! CLIENT_PORTAL_DRIVE_EMAIL_STUB no key`)
-    return { success: true, source: 'stub' }
+    console.log(`!!! CLIENT_PORTAL_EMAIL_STUB to=${to} — RESEND_API_KEY missing`)
+    return { success: true, source: 'stub', error: 'RESEND_API_KEY missing' }
   }
 
   try {
-    const subject = 'Your Client Portal Folders'
-    const html = buildClientPortalDriveEmail({ firstName, driveLinks })
+    const subject = 'Your Client Portal — documents & meetings'
+    const html = buildClientPortalDriveEmail({ firstName, lastName, email, phone, driveFolderUrl, yearFolders, meetings })
     const res = await fetch('https://api.resend.com/emails', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${apiKey}` },
       body: JSON.stringify({ from, to, subject, html }),
     })
-    console.log(`!!! CLIENT_PORTAL_DRIVE_EMAIL_RESPONSE status=${res.status} ok=${res.ok}`)
+    console.log(`!!! CLIENT_PORTAL_EMAIL_RESPONSE status=${res.status} ok=${res.ok}`)
     if (!res.ok) {
-        const text = await res.text().catch(() => '')
-        const msg = `Resend client portal drive email failed ${res.status} ${text}`
-        console.log(`!!! CLIENT_PORTAL_DRIVE_EMAIL_FAILED ${msg}`)
-        return { success: false, source: 'live', error: msg }
+      const txt = await res.text().catch(() => '')
+      const msg = `Resend client portal failed ${res.status} ${txt}`
+      console.log(`!!! CLIENT_PORTAL_EMAIL_FAILED ${msg}`)
+      return { success: false, source: 'live', error: msg }
     }
     const json = (await res.json()) as any
-    console.log(`!!! CLIENT_PORTAL_DRIVE_EMAIL_SUCCESS id=${json.id}`)
+    console.log(`!!! CLIENT_PORTAL_EMAIL_SUCCESS id=${json.id}`)
     return { success: true, id: json.id, source: 'live' }
   } catch (e: any) {
-    console.log(`!!! CLIENT_PORTAL_DRIVE_EMAIL_EXCEPTION ${e?.message}`)
+    console.log(`!!! CLIENT_PORTAL_EMAIL_EXCEPTION ${e?.message}`)
     return { success: false, source: 'live', error: e?.message }
   }
 }
@@ -281,23 +384,21 @@ export async function sendClientPortalDriveEmail(params: {
 export async function sendAdminDriveEmail(params: {
   to: string
   firstName: string
-  driveLink: string
-  meetings: string[]
+  driveLink: string | null
+  meetings: EmailMeeting[]
   env: EmailEnv
 }): Promise<SendEmailResult> {
   const { to, firstName, driveLink, meetings, env } = params
-  const from = env?.EMAIL_FROM || env?.FROM || 'onboarding@resend.dev'
-  const apiKey = getResendApiKey(env) || env?.RESEND_API_KEY
-  
+  const from = resendFrom(env)
+  const apiKey = resendKey(env)
 
-  console.log(`!!! ADMIN_DRIVE_EMAIL_START to=${to} hasKey=${!!apiKey} env=${env?.ENVIRONMENT}`)
   if (!apiKey) {
-    console.log(`!!! ADMIN_DRIVE_EMAIL_STUB no key`)
-    return { success: true, source: 'stub' }
+    console.log(`!!! ADMIN_DRIVE_EMAIL_STUB to=${to} — RESEND_API_KEY missing`)
+    return { success: true, source: 'stub', error: 'RESEND_API_KEY missing' }
   }
 
   try {
-    const subject = `Admin Drive Update: ${firstName}`
+    const subject = `Your upcoming meetings — ${firstName}`
     const html = buildAdminDriveEmail({ firstName, driveLink, meetings })
     const res = await fetch('https://api.resend.com/emails', {
       method: 'POST',
@@ -306,16 +407,57 @@ export async function sendAdminDriveEmail(params: {
     })
     console.log(`!!! ADMIN_DRIVE_EMAIL_RESPONSE status=${res.status} ok=${res.ok}`)
     if (!res.ok) {
-        const text = await res.text().catch(() => '')
-        const msg = `Resend admin drive email failed ${res.status} ${text}`
-        console.log(`!!! ADMIN_DRIVE_EMAIL_FAILED ${msg}`)
-        return { success: false, source: 'live', error: msg }
+      const txt = await res.text().catch(() => '')
+      const msg = `Resend admin drive failed ${res.status} ${txt}`
+      console.log(`!!! ADMIN_DRIVE_EMAIL_FAILED ${msg}`)
+      return { success: false, source: 'live', error: msg }
     }
     const json = (await res.json()) as any
     console.log(`!!! ADMIN_DRIVE_EMAIL_SUCCESS id=${json.id}`)
     return { success: true, id: json.id, source: 'live' }
   } catch (e: any) {
     console.log(`!!! ADMIN_DRIVE_EMAIL_EXCEPTION ${e?.message}`)
+    return { success: false, source: 'live', error: e?.message }
+  }
+}
+
+export async function sendBookingCancelledEmail(params: {
+  to: string
+  firstName: string
+  dateTime: string
+  purpose?: string
+  driveFolderUrl?: string
+  env: EmailEnv
+}): Promise<SendEmailResult> {
+  const { to, firstName, dateTime, purpose, driveFolderUrl, env } = params
+  const from = resendFrom(env)
+  const apiKey = resendKey(env)
+
+  if (!apiKey) {
+    console.log(`!!! BOOKING_CANCELLED_EMAIL_STUB to=${to} — RESEND_API_KEY missing`)
+    return { success: true, source: 'stub', error: 'RESEND_API_KEY missing' }
+  }
+
+  try {
+    const subject = `Meeting cancelled — ${dateTime}`
+    const html = buildBookingCancelledEmail({ firstName, dateTime, purpose, driveFolderUrl })
+    const res = await fetch('https://api.resend.com/emails', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${apiKey}` },
+      body: JSON.stringify({ from, to, subject, html }),
+    })
+    console.log(`!!! BOOKING_CANCELLED_EMAIL_RESPONSE status=${res.status} ok=${res.ok}`)
+    if (!res.ok) {
+      const txt = await res.text().catch(() => '')
+      const msg = `Resend cancelled failed ${res.status} ${txt}`
+      console.log(`!!! BOOKING_CANCELLED_EMAIL_FAILED ${msg}`)
+      return { success: false, source: 'live', error: msg }
+    }
+    const json = (await res.json()) as any
+    console.log(`!!! BOOKING_CANCELLED_EMAIL_SUCCESS id=${json.id}`)
+    return { success: true, id: json.id, source: 'live' }
+  } catch (e: any) {
+    console.log(`!!! BOOKING_CANCELLED_EMAIL_EXCEPTION ${e?.message}`)
     return { success: false, source: 'live', error: e?.message }
   }
 }

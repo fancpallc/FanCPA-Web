@@ -7,19 +7,23 @@ describe('client-portal/lookup', () => {
       body: JSON.stringify({ email: 'nonexistent@example.com', turnstileToken: 'test-token' }),
     });
 
-    // Mock dependencies
-    const env = { 
+    // Mock dependencies — use ENVIRONMENT=test to hit Turnstile stub bypass, or TURNSTILE_SECRET_KEY alias
+    const env = {
       ENVIRONMENT: 'test',
-      TURNSTILE_SECRET: 'test-secret',
-      DB: { prepare: () => ({ bind: () => ({ first: () => null }) }) } 
-    };
+      TURNSTILE_SECRET_KEY: 'test-secret',
+      DB: {
+        prepare: () => ({
+          bind: () => ({
+            first: () => null,
+            all: () => Promise.resolve({ results: [] }),
+          }),
+        }),
+      },
+    } as any
 
-    // Need to mock turnstile or bypass it in tests somehow based on how others do it.
-    // Assuming for now I'll just mock the verification call.
     const response = await onRequestPost({ request, env } as any);
-    const data = await response.json();
+    const data = (await response.json()) as any;
 
     expect(data).toEqual({ success: true, message: 'If your email exists, we sent a link' });
   });
 });
-

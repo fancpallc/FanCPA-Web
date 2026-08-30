@@ -160,7 +160,20 @@ export function ManageBookings() {
     }
   }
 
+  function isWithin24h(booking: BookingItem): boolean {
+    const raw = (booking as any).slotStart
+    if (!raw) return false
+    const t = new Date(raw).getTime()
+    if (isNaN(t)) return false
+    const diff = t - Date.now()
+    return diff > 0 && diff < 24 * 60 * 60 * 1000
+  }
+
   const handleCancel = async (booking: BookingItem) => {
+    if (isWithin24h(booking)) {
+      setError('Too late to cancel — within 24 hours. Please reply to your confirmation email.')
+      return
+    }
     if (!confirm(`Cancel your ${booking.dateTime} meeting? The slot will be released.`)) return
     debug(`!!! MANAGE_CANCEL_START id=${booking.id} token=${booking.cancelToken.slice(0, 8)}...`)
     setCancellingId(booking.id)
@@ -246,10 +259,14 @@ export function ManageBookings() {
                         {b.status}
                       </span>
                     </div>
-                    <div className="flex gap-2 flex-wrap">
-                      <button onClick={() => handleCancel(b)} disabled={cancellingId === b.id} className="px-5 py-2.5 bg-white border border-red-600 text-red-700 rounded-full text-xs font-semibold hover:bg-red-50 disabled:opacity-50 leading-none">
-                        {cancellingId === b.id ? 'Cancelling…' : 'Cancel meeting'}
-                      </button>
+                    <div className="flex gap-2 flex-wrap items-center">
+                      {isWithin24h(b) ? (
+                        <span className="text-[11px] text-amber-700 bg-amber-50 border border-amber-200 rounded-full px-3 py-1">Cancellation closed — within 24h, reply to email</span>
+                      ) : (
+                        <button onClick={() => handleCancel(b)} disabled={cancellingId === b.id} title="Cancel 24 hours prior — within 24h you must email us" className="px-5 py-2.5 bg-white border border-red-600 text-red-700 rounded-full text-xs font-semibold hover:bg-red-50 disabled:opacity-50 leading-none">
+                          {cancellingId === b.id ? 'Cancelling…' : 'Cancel meeting'}
+                        </button>
+                      )}
                     </div>
                   </li>
                 ))}

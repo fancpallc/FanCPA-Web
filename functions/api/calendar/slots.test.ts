@@ -134,4 +134,66 @@ describe('GET /api/calendar/slots', () => {
       expect([1,2,3,4,5]).toContain(day)
     })
   })
+
+  it('T5 guard: non-whole-hour env 09:30 + 09:45 that snaps to same hour must not silently return empty — fallback to 09:00-17:00', async () => {
+    const { onRequestGet } = await import('./slots')
+    const env = {
+      BOOKING_CALENDAR_ID: 'alpha-booking@group.calendar.google.com',
+      WORKING_HOURS_START: '09:30', // non-whole-hour
+      WORKING_HOURS_END: '09:45', // both snap to 09:00 => collapsed
+      WORKING_DAYS: '1,2,3,4,5',
+      ENVIRONMENT: 'test',
+    } as any
+    const request = new Request('http://localhost:8788/api/calendar/slots?weeks=1')
+    const response = await onRequestGet({ request, env, params: {}, waitUntil: () => {}, next: async () => new Response(''), data: {} } as any)
+    const json = await response.json() as any
+    expect(response.status).toBe(200)
+    // Must fallback, not empty
+    expect(json.slots.length).toBeGreaterThan(0)
+    expect(json.workingHours.start).toBe('09:00')
+    expect(json.workingHours.end).toBe('17:00')
+  })
+
+  it('should respect site_time_zone from DB over env TIMEZONE (T4 precedence DB wins)', async () => {
+    const { onRequestGet } = await import('./slots')
+    const mockDb = {
+      prepare: (sql: string) => ({
+        bind: (..._args: any[]) => ({
+          first: async () => ({
+            booking_min_notice_days: null,
+            site_time_zone: 'America/Los_Angeles',
+            site_working_hours_start: null,
+            site_working_hours_end: null,
+            site_working_days: null,
+          }),
+        }),
+        first: async () => ({
+          booking_min_notice_days: null,
+          site_time_zone: 'America/Los_Angeles',
+          site_working_hours_start: null,
+          site_working_hours_end: null,
+          site_working_days: null,
+        }),
+      }),
+    }
+    const env = {
+      BOOKING_CALENDAR_ID: 'x',
+      WORKING_HOURS_START: '09:00',
+      WORKING_HOURS_END: '10:00',
+      WORKING_DAYS: '1,2,3,4,5',
+      TIMEZONE: 'America/New_York', // env says NY, DB says LA — DB must win
+      DB: mockDb,
+      ENVIRONMENT: 'test',
+    } as any
+    const request = new Request('http://localhost:8788/api/calendar/slots?weeks=1')
+    const response = await onRequestGet({ request, env, params: {}, waitUntil: () => {}, next: async () => new Response(''), data: {} } as any)
+    const json = await response.json() as any
+    expect(json.workingHours.timeZone).toBe('America/Los_Angeles')
+    // LA 09:00 PDT July = 16:00 UTC — first slot should be 16:00 UTC not 13:00
+    if (json.slots.length > 0) {
+      const first = json.slots[0] as any
+      // July is PDT offset 7 => 09:00 LA = 16:00 UTC; slot may be noon UTC filtered but we check hour via UTC string
+      expect(first.start).toContain('16:00')
+    }
+  })
 })
