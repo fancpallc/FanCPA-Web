@@ -243,15 +243,6 @@ export async function sendAdminClientEmail(contact_id: string, options: FetchOpt
   })
 }
 
-export async function createManualBooking(body: any, options: FetchOptions = {}): Promise<any> {
-  const { json } = await fetchJson('/api/admin/bookings/manual', {
-    ...options,
-    method: 'POST',
-    body: JSON.stringify(body)
-  })
-  return json
-}
-
 export interface R2UsageResponse {
   checkQuota: boolean
   authed: boolean
@@ -318,16 +309,11 @@ export async function createBooking(payload: BookingPayload, options: FetchOptio
 }
 
 export async function lookupClientPortal(payload: { email: string; turnstileToken: string }, options: FetchOptions = {}): Promise<{ success: boolean; message: string }> {
-  const res = await fetch('/api/client-portal/lookup', {
-    method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify(payload),
+  const { json } = await fetchJson('/api/client-portal/lookup', {
     ...options,
+    method: 'POST',
+    body: JSON.stringify(payload),
   })
-  const json = await res.json()
-  if (!res.ok) {
-    throw new ApiError(`Request failed with ${res.status}`, res.status, json)
-  }
   return json as { success: boolean; message: string }
 }
 

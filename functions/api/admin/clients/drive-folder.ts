@@ -16,7 +16,11 @@ export const onRequestGet: PagesFunction<Env> = async ({ request, env }) => {
     .bind(contact_id, year)
     .first()
 
-  return new Response(JSON.stringify(row || {}), { headers: { 'Content-Type': 'application/json' } })
+  if (!row) {
+    return new Response('Not found', { status: 404 })
+  }
+
+  return new Response(JSON.stringify(row), { headers: { 'Content-Type': 'application/json' } })
 }
 
 export const onRequestPatch: PagesFunction<Env> = async ({ request, env }) => {
@@ -37,17 +41,20 @@ export const onRequestPatch: PagesFunction<Env> = async ({ request, env }) => {
   const db = env.DB as any
 
   // Check if contact exists
-  const contact = await db.prepare('SELECT id FROM contacts WHERE id = ?').bind(contact_id).first()
+  const contact = await db.prepare('SELECT id, email FROM contacts WHERE id = ?').bind(contact_id).first()
   if (!contact) return new Response('Contact not found', { status: 404 })
 
+  console.log(`!!! ADMIN_DRIVE_FOLDER_PATCH contact_id=${contact_id} year=${year}`)
+
   await db.prepare(`
-    INSERT INTO client_drive_folders (contact_id, year, folder_url, folder_id, is_manual)
-    VALUES (?, ?, ?, ?, 1)
+    INSERT INTO client_drive_folders (contact_id, email, year, folder_url, folder_id, is_manual, updated_at)
+    VALUES (?, ?, ?, ?, ?, 1, datetime('now'))
     ON CONFLICT(contact_id, year) DO UPDATE SET
       folder_url = excluded.folder_url,
       folder_id = excluded.folder_id,
-      is_manual = 1
-  `).bind(contact_id, year, folder_url, folder_id).run()
+      is_manual = 1,
+      updated_at = datetime('now')
+  `).bind(contact_id, contact.email, year, folder_url, folder_id).run()
 
   return new Response(JSON.stringify({ success: true }))
 }

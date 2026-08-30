@@ -9,6 +9,7 @@ describe('client-portal/lookup', () => {
 
     // Mock dependencies
     const env = { 
+      ENVIRONMENT: 'test',
       TURNSTILE_SECRET: 'test-secret',
       DB: { prepare: () => ({ bind: () => ({ first: () => null }) }) } 
     };
@@ -21,3 +22,4 @@ describe('client-portal/lookup', () => {
     expect(data).toEqual({ success: true, message: 'If your email exists, we sent a link' });
   });
 });
+
