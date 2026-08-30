@@ -23,7 +23,6 @@ bucket_name = "fancpa-images"
 [[env.preview.d1_databases]]
 binding = "DB"
 database_name = "fancpa-db-preview"
-database_id = "preview-db-id-placeholder"
 
 [[env.preview.r2_buckets]]
 binding = "R2_BUCKET"
