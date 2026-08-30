@@ -252,6 +252,7 @@ export function Admin() {
               {quotaLoading ? 'Checking…' : quota ? `Storage ${formatStorage(quota.totalMB)} of ${formatStorage(quota.limitMB)}` : 'Check storage'}
             </button>
             <button onClick={() => { refetch(); content.refetch() }} className="px-3 min-h-11 inline-flex items-center bg-white border border-slate-500 rounded-full text-[11px] font-semibold hover:border-slate-900" aria-label="Reload content from the server" title="Reload content from the server">Refresh</button>
+            <a href="/admin/clients" className="px-3 min-h-11 inline-flex items-center bg-white border border-slate-500 rounded-full text-[11px] font-semibold hover:border-slate-900">Clients</a>
             <a href="/" className="px-3 min-h-11 inline-flex items-center bg-slate-900 text-white rounded-full text-[11px] font-semibold" aria-label="View site">View site</a>
           </div>
         </div>

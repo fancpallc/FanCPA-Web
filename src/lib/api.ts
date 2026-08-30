@@ -219,8 +219,11 @@ export async function fetchAdminAuth(options: FetchOptions = {}): Promise<AdminA
   return json as AdminAuthResponse
 }
 
-export async function searchAdminClients(q: string, options: FetchOptions = {}): Promise<AdminClientRow[]> {
-  const { json } = await fetchJson(`/api/admin/clients/search?q=${encodeURIComponent(q)}`, { ...options })
+export async function searchAdminClients(q: string, opts?: { startDate?: string; endDate?: string }, options: FetchOptions = {}): Promise<AdminClientRow[]> {
+  const params = new URLSearchParams({ q })
+  if (opts?.startDate) params.set('start_date', opts.startDate)
+  if (opts?.endDate) params.set('end_date', opts.endDate)
+  const { json } = await fetchJson(`/api/admin/clients/search?${params.toString()}`, { ...options })
   return (json as any).results
 }
 

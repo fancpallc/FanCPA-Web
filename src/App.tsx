@@ -3,6 +3,7 @@ import { Layout } from './components/common/Layout'
 import { Home } from './pages/Home'
 import { Health } from './pages/Health'
 import { Admin } from './pages/Admin'
+import AdminClients from './pages/AdminClients'
 import ClientPortal from './pages/ClientPortal'
 import { debug } from './lib/debug'
 import { useContent } from './hooks/useContent'
@@ -59,6 +60,9 @@ function App() {
   // Admin ships its own sticky toolbar — the public Nav would stack a second
   // sticky bar on top of it and expose #about/#calendar anchors that only exist
   // on the landing page.
+  if (path.startsWith('/admin/clients')) {
+    return <AdminClients />
+  }
   if (path.startsWith('/admin')) {
     return <Admin />
   }
