@@ -270,3 +270,12 @@ export async function createBooking(payload: BookingPayload, options: FetchOptio
   }
 }
 
+export async function lookupClientPortal(payload: { email: string; turnstileToken: string }, options: FetchOptions = {}): Promise<{ success: boolean; message: string }> {
+  const { json } = await fetchJson('/api/client-portal/lookup', {
+    ...options,
+    method: 'POST',
+    body: JSON.stringify(payload),
+  })
+  return json as { success: boolean; message: string }
+}
+
