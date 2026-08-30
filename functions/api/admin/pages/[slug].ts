@@ -122,9 +122,10 @@ export const onRequestPut: PagesFunction<Env> = async ({ request, env, params })
     if (field === 'site_working_days') {
       if (value === null || value === '') continue
       if (typeof value !== 'string') return new Response(JSON.stringify({ error: 'site_working_days must be text like 1,2,3,4,5' }), { status: 400, headers })
+      if (String(value).trim().toLowerCase() === 'none') continue // paused — no days, slots emits []
       // basic shape: comma list 0-6
       const parts = value.split(',').map(s => s.trim()).filter(Boolean)
-      if (parts.length === 0) return new Response(JSON.stringify({ error: 'site_working_days cannot be empty if set — use 1,2,3,4,5 or null to reset' }), { status: 400, headers })
+      if (parts.length === 0) return new Response(JSON.stringify({ error: 'site_working_days cannot be empty if set — use 1,2,3,4,5 or none to pause, null to reset' }), { status: 400, headers })
       for (const p of parts) {
         const n = parseInt(p, 10)
         if (isNaN(n) || n < 0 || n > 6) return new Response(JSON.stringify({ error: `Invalid working day: ${p} — must be 0-6` }), { status: 400, headers })

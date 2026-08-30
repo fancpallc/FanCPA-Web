@@ -1561,3 +1561,142 @@ no automated coverage. Verify against a real invite.
 **Needs a decision:** whether env or DB wins for site settings (T4/T5); whether the copy button is
 allowed to use inline JS (T2); and whether the client's timezone continues to govern the calendar
 event while the admin's governs slots and display (T4).
+
+---
+
+# Rev 5b — "Your site" scheduling controls, UI spec (2026-08-29)
+
+Two presentation changes to the admin settings added in Rev 5. Behaviour and storage stay the same;
+only the controls change. Verified against `src/pages/Admin.tsx:427-489`.
+
+## Current state
+
+| Control | Today | Line |
+|---|---|---|
+| Working hours start | Full-width `<select>`, own grid cell, own label, 24-hour labels (`09:00`) | `:443-459` |
+| Working hours end | A second full-width `<select>`, second grid cell, second label | `:460-477` |
+| Working days | Free-text `EditableText` — the admin types `1,2,3,4,5` and has to know `0=Sun` | `:478-489` |
+
+The parent is `grid grid-cols-1 lg:grid-cols-2 gap-4` (`:325`), so start and end each consume a
+half-width cell and stack on narrow screens. `WHOLE_HOURS` (`:65-69`) generates 17 options from
+`06:00` to `22:00`, with `value === label`.
+
+---
+
+## U1. Inline hour range — "9 am – 5 pm" on one line
+
+**Ask:** collapse the two selects into a single inline range with am/pm labels and whole hours only.
+
+**Shape:**
+
+```
+Working hours   [ 9 am ▾ ]  –  [ 5 pm ▾ ]
+```
+
+One grid cell (or `lg:col-span-2` if it should span the full width), one label, two selects and an
+en-dash between them, in a `flex items-center gap-2 flex-wrap` row.
+
+### The one thing that must not change: the stored value
+
+Keep writing `HH:00`. Only the *option label* becomes am/pm. Three things depend on the current
+format and will break silently if the value changes:
+
+- `isWholeHourTime` in `functions/api/admin/pages/[slug].ts` validates the field on save.
+- `slots.ts:95` parses with `/^(\d{1,2}):(\d{2})$/`; a non-match returns `-1` and trips the
+  `SLOTS_INVALID_WORKING_HOURS` fallback, so the site would quietly serve default hours.
+- Migration `0017` typed the columns `TEXT` with a `MAX_LENGTH` of 10.
+
+So: `{ value: '09:00', label: '9 am' }`. Nothing server-side changes.
+
+### Label mapping
+
+`06:00 → 6 am` … `11:00 → 11 am`, `12:00 → 12 pm`, `13:00 → 1 pm` … `22:00 → 10 pm`. The two that
+get written wrong are noon and midnight — `12:00` is **pm**, and `00:00` would be **12 am**. The
+current range starts at 06:00 so midnight is out of scope, but if the range is ever widened the
+mapping needs `h % 12 || 12`, not `h % 12`.
+
+### Cross-field validation — worth adding while the fields are adjacent
+
+Right now end-after-start is enforced **nowhere**. `pages/[slug].ts` validates each field
+independently, and `slots.ts:98` silently falls back to 09:00–17:00 when `eM <= sM`. That fallback is
+correct as a backstop but it means an admin can save `5 pm – 9 am`, see it accepted, and get default
+hours with no explanation. Putting the two controls on one line makes the invalid state visible, which
+is the moment to fix it:
+
+- **UI:** filter the end select to hours strictly after the chosen start (and ≥ start + 1, since slots
+  are 60 minutes). Changing start to a value ≥ end should push end forward rather than leave an
+  invalid pair on screen.
+- **Server:** add a relational check in `pages/[slug].ts`. It has to read the *other* field's current
+  value from the row, since a PATCH may carry only one of the two — that's why this wasn't done
+  originally and it is the only non-trivial part of U1.
+
+### Save semantics
+
+Each select currently saves on `change` independently. With an inline pair, saving start before end
+can transiently persist `start >= end`. Either save both fields in one `updatePage` call when either
+changes, or keep per-field saves and accept that the `slots.ts` fallback covers the window. The first
+is cleaner and avoids a state the server would reject once the relational check lands.
+
+---
+
+## U2. Weekday toggle buttons
+
+**Ask:** replace the comma-list text field with seven toggles, Sunday through Saturday, click to
+activate and click again to deactivate.
+
+**Shape:**
+
+```
+Working days   [S] [M] [T] [W] [T] [F] [S]
+                    ▔▔▔ ▔▔▔ ▔▔▔ ▔▔▔ ▔▔▔      ← Mon–Fri active
+```
+
+**Storage is unchanged** — still the comma list `0..6` in `site_working_days`, which
+`pages/[slug].ts` already validates (each entry parses to 0–6, list must not be empty) and
+`parseWorkingDays` in `slots.ts` already consumes. This is purely an input-method change, so the
+whole backend stays as is.
+
+### Behaviour
+
+- Order the buttons Sun → Sat so the visible order matches the stored `0..6`. The business runs
+  Mon–Fri, so Monday-first would read more naturally — but then the on-screen order and the stored
+  indices disagree, which is a debugging trap. Recommend Sun-first.
+- Duplicate letters (S/T/S/T) mean the visible glyph cannot be the accessible name. Give each button
+  `aria-label="Monday"` etc. and, ideally, `aria-pressed={active}` — that is what communicates
+  toggle state to a screen reader, and it is the piece most often skipped.
+- **Deselecting the last day:** the server rejects an empty list outright
+  (`site_working_days cannot be empty if set`). Do not surface that as an error toast — instead treat
+  "none selected" as a reset and send `null`, which falls back to the Mon–Fri default, with a hint
+  line reading *"No days selected — using the default, Mon–Fri."* Otherwise the admin's first attempt
+  to clear the field produces a server error for a reasonable action.
+- **Saving:** a click per day means up to seven PATCHes. Debounce, or save on blur of the group.
+
+### Styling — the shim constrains this
+
+Every class must already exist in `src/index.css`, because `styles.coverage.test.ts` now fails the
+build otherwise. Verified available: `min-h-11`, `w-11`, `h-11`, `rounded-full`, `bg-slate-900`,
+`text-white`, `bg-white`, `border-slate-500`, `hover:bg-slate-50`, `inline-flex`, `items-center`,
+`justify-center`, `gap-1`, `gap-2`, `flex-wrap`, `text-xs`, `font-semibold`. So:
+
+- Active: `bg-slate-900 text-white`
+- Inactive: `bg-white border border-slate-500 hover:bg-slate-50`
+- Both: `w-11 h-11 inline-flex items-center justify-center rounded-full text-xs font-semibold`
+
+`w-11`/`h-11` gives the 44px tap target the rest of the admin now uses. Do not reach for a colour
+outside that list without adding it to `index.css` in the same change — that is exactly the failure
+that made the Drive Save button invisible.
+
+Wrap the seven in a `role="group"` with `aria-label="Working days"`, and keep the existing
+`editor-chrome text-[11px] text-gray-500` caption above it, rewritten to drop the `0=Sun` explanation
+that the toggles make unnecessary.
+
+---
+
+## Sequencing
+
+Both are contained to `Admin.tsx` and need no migration. U1's optional server-side relational check is
+the only backend touch. They belong in one PR — same settings block, same review.
+
+**Still outstanding from the previous round:** `getTimezoneOffsetHours` returns `-0` for UTC, so
+`google-calendar.test.ts:193` fails and the suite exits 1. One-line fix at `google-calendar.ts:110`
+(normalise `-0` to `0`); do that before anything else lands on top of a red suite.

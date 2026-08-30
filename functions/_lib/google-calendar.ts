@@ -107,7 +107,8 @@ export function getTimezoneOffsetHours(timeZone: string, date: Date): number {
     if (m) {
       const sign = m[1]
       const h = parseInt(m[2], 10)
-      return sign === '-' ? h : -h
+      // Normalize -0 to 0 — h===0 gives -0 for '+' per JS, which fails Object.is checks
+      return (sign === '-' ? h : -h) || 0
     }
   } catch {}
   // Fallback for Eastern if formatting failed, else assume 0 offset

@@ -141,7 +141,7 @@ export function Home() {
                     setTimeZone={setTimeZone}
                   />
                 )}
-                {!selectedDate && (
+                {Object.values(grouped).some((day: any) => day.some((s: any) => s.available)) && !selectedDate && (
                   <div className="text-center text-sm text-gray-500 py-4">
                     Select a day above to see its available times.
                   </div>

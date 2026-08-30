@@ -125,10 +125,11 @@ export const onRequestPost: PagesFunction<Env> = async ({ request, env }) => {
       try {
         const weekStart = getWeekStart(new Date()).toISOString()
         
-        // Get dynamic limit from DB page home config
+        // Get dynamic limit from DB — 0 means no limit (disabled)
         const page = await db.prepare('SELECT booking_max_per_week FROM pages WHERE slug = "home"').first() as any
-        const dbMax = page?.booking_max_per_week ?? 3
-        const maxPerWeek = dbMax > 0 ? dbMax : getMaxBookingsPerWeek(env)
+        const dbMaxRaw = page?.booking_max_per_week
+        const dbMax = typeof dbMaxRaw === 'number' ? dbMaxRaw : 3
+        const maxPerWeek = dbMaxRaw !== null && dbMaxRaw !== undefined ? dbMax : getMaxBookingsPerWeek(env)
         console.log(`!!! BOOKING_RATE_LIMIT weekStart=${weekStart} max=${maxPerWeek}`)
         
         const countStmt = db.prepare('SELECT COUNT(*) as count FROM bookings WHERE contact_id IN (SELECT id FROM contacts WHERE email = ?1) AND created_at >= ?2')

@@ -26,6 +26,7 @@ export interface Env {
 
 function parseWorkingDays(raw?: string): number[] {
   if (!raw) return [1, 2, 3, 4, 5]
+  if (String(raw).trim().toLowerCase() === 'none') return [] // paused
   try {
     return raw.split(',').map((s) => parseInt(s.trim(), 10)).filter((n) => !isNaN(n) && n >= 0 && n <= 6)
   } catch {
@@ -155,6 +156,11 @@ export const onRequestGet: PagesFunction<Env> = async ({ request, env }) => {
 
     return new Response(
       JSON.stringify({
+        // NOTE (Rev 5 UX review): the response deliberately carries only slots — workingHours.days
+        // is logged above but never returned. CalendarView.tsx hardcodes a weekend exclusion
+        // (KNOWN P0 there), and one proposed fix was "thread site_working_days through"; that would
+        // require adding it here first. Deriving bookable days from the slots themselves avoids
+        // changing this contract at all.
         slots: safeSlots,
         weeks,
         source, // stub or live — for debugging, UI can show badge

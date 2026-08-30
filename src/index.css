@@ -515,6 +515,7 @@ section { scroll-margin-top: 72px; }
 .h-16 { height: 4rem; }
 .h-full { height: 100%; }
 .h-fit { height: fit-content; }
+.min-h-4 { min-height: 1rem; }
 .min-h-8 { min-height: 2rem; }
 .min-w-0 { min-width: 0; }
 .min-w-\[200px\] { min-width: 200px; }
@@ -693,6 +694,7 @@ section { scroll-margin-top: 72px; }
 }
 @media (min-width: 1024px) {
   .lg\:flex { display: flex; }
+  .lg\:col-span-2 { grid-column: span 2 / span 2; }
 }
 
 /* Rev4 — P0/P1 missing utilities that caused invisible buttons, no modal scrim, broken layout */

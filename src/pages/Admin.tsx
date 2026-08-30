@@ -62,11 +62,67 @@ const SITE_TIMEZONES = [
   { value: 'Pacific/Honolulu', label: 'Hawaii - Honolulu' },
   { value: 'UTC', label: 'UTC' },
 ]
+function formatAmPmLabel(hhmm: string): string {
+  const m = /^(\d{1,2}):(\d{2})$/.exec(hhmm.trim())
+  if (!m) return hhmm
+  const h = parseInt(m[1], 10)
+  // 12 pm, 0/24 -> 12 am per spec h%12||12
+  const display = h % 12 || 12
+  const suffix = h < 12 ? 'am' : 'pm'
+  return `${display} ${suffix}`
+}
 const WHOLE_HOURS = Array.from({ length: 17 }, (_, i) => {
-  const h = 6 + i // 06..22
+  const h = 6 + i // 06..22 per T5 range
   const v = `${String(h).padStart(2, '0')}:00`
-  return { value: v, label: v }
+  return { value: v, label: formatAmPmLabel(v) }
 })
+// U1 fix: start needs at least 60min slot, max end 22:00 → cap start at 21:00
+const START_HOURS = WHOLE_HOURS.filter(h => parseInt(h.value.split(':')[0], 10) <= 21)
+const END_HOURS = WHOLE_HOURS
+
+const WEEKDAYS = [
+  { value: 0, short: 'Sun', full: 'Sunday' },
+  { value: 1, short: 'Mon', full: 'Monday' },
+  { value: 2, short: 'Tue', full: 'Tuesday' },
+  { value: 3, short: 'Wed', full: 'Wednesday' },
+  { value: 4, short: 'Thu', full: 'Thursday' },
+  { value: 5, short: 'Fri', full: 'Friday' },
+  { value: 6, short: 'Sat', full: 'Saturday' },
+] as const
+
+function parseDaysSet(raw?: string | null): Set<number> {
+  if (!raw) return new Set([1, 2, 3, 4, 5]) // default Mon-Fri when never set
+  const trimmed = String(raw).trim().toLowerCase()
+  if (trimmed === 'none') return new Set() // paused — no days
+  try {
+    const parts = String(raw).split(',').map(s => parseInt(s.trim(), 10)).filter(n => !isNaN(n) && n >= 0 && n <= 6)
+    if (parts.length === 0) return new Set([1, 2, 3, 4, 5]) // legacy fallback for unparsable
+    return new Set(parts)
+  } catch {
+    return new Set([1, 2, 3, 4, 5])
+  }
+}
+// P0 fix: empty set means paused (no bookings), stored as 'none' so slots.ts emits []
+function daysSetToString(set: Set<number>): string {
+  if (set.size === 0) return 'none'
+  return Array.from(set).sort((a, b) => a - b).join(',')
+}
+function formatDaysPreview(set: Set<number>): string {
+  if (set.size === 0) return 'Paused'
+  const all = [0, 1, 2, 3, 4, 5, 6]
+  if (set.size === 5 && [1, 2, 3, 4, 5].every(d => set.has(d))) return 'Mon–Fri'
+  if (set.size === 7) return 'Every day'
+  if (set.size === 2 && set.has(0) && set.has(6)) return 'Weekends'
+  // compact list sorted Sun->Sat
+  const sorted = Array.from(set).sort((a, b) => a - b)
+  return sorted.map(n => WEEKDAYS.find(w => w.value === n)?.short || String(n)).join(', ')
+}
+function formatTimezoneShortLabel(tz: string): string {
+  if (!tz) return 'Eastern'
+  const found = SITE_TIMEZONES.find(s => s.value === tz)
+  if (found) return found.label.replace('Default ', '').split(' - ')[0]
+  return tz.split('/').pop()?.replace('_', ' ') || tz
+}
 
 function getOldKeyFromUrl(url?: string | null): string | undefined {
   if (!url) return undefined
@@ -96,7 +152,7 @@ export function Admin() {
   const { data, loading, error, isAuthed, isBypass, email, refetch } = auth
   const content = useAdminContent()
   // Only for the read-only booking preview below — the admin does not edit slots.
-  const { grouped: calendarSlots, slotMinutes, excludeToday } = useCalendar(2)
+  const { grouped: calendarSlots, slotMinutes, excludeToday, loading: calLoading } = useCalendar(2)
   const [timeZone, setTimeZone] = useState('America/New_York') // Default for admin preview
   const [quota, setQuota] = useState<any>(null)
   const [quotaLoading, setQuotaLoading] = useState(false)
@@ -104,6 +160,42 @@ export function Admin() {
   const [newSectionType, setNewSectionType] = useState('text-block')
   const [newSectionHeading, setNewSectionHeading] = useState('')
   const [newSectionError, setNewSectionError] = useState<string | null>(null)
+  // scheduling local state — optimistic to avoid revert flash during PUT round-trip
+  const [workingDays, setWorkingDays] = useState<Set<number>>(new Set([1, 2, 3, 4, 5]))
+  const [tzLocal, setTzLocal] = useState<string>('')
+  const [whStartLocal, setWhStartLocal] = useState<string>('')
+  const [whEndLocal, setWhEndLocal] = useState<string>('')
+  const [schedulingError, setSchedulingError] = useState<string | null>(null)
+  const [schedulingSaved, setSchedulingSaved] = useState(false)
+  const workingDaysSaveRef = React.useRef<number | null>(null)
+  const schedulingSavedTimeoutRef = React.useRef<number | null>(null)
+
+  React.useEffect(() => {
+    if (content.page?.site_working_days !== undefined) {
+      const raw = content.page?.site_working_days
+      setWorkingDays(parseDaysSet(raw || null))
+    }
+  }, [content.page?.site_working_days])
+  React.useEffect(() => {
+    if (content.page?.site_time_zone !== undefined) {
+      const v = content.page?.site_time_zone || ''
+      setTzLocal(v)
+      if (v) setTimeZone(v)
+    }
+  }, [content.page?.site_time_zone])
+  React.useEffect(() => {
+    if (tzLocal) setTimeZone(tzLocal)
+  }, [tzLocal])
+  React.useEffect(() => {
+    if (content.page?.site_working_hours_start !== undefined) {
+      setWhStartLocal(content.page?.site_working_hours_start || '')
+    }
+  }, [content.page?.site_working_hours_start])
+  React.useEffect(() => {
+    if (content.page?.site_working_hours_end !== undefined) {
+      setWhEndLocal(content.page?.site_working_hours_end || '')
+    }
+  }, [content.page?.site_working_hours_end])
 
   const handleCheckQuota = async () => {
     setQuotaLoading(true)
@@ -386,7 +478,7 @@ export function Admin() {
                 </div>
               </div>
               <div>
-                <div className="editor-chrome text-[11px] text-gray-500 mb-1">Bookings limit per week (set 0 to disable)</div>
+                <div className="editor-chrome text-[11px] text-gray-500 mb-1">Most bookings one client can make per week (0 = no limit)</div>
                 <div className="text-sm">
                   <EditableText
                     value={String(content.page?.booking_max_per_week ?? 3)}
@@ -424,68 +516,138 @@ export function Admin() {
                   />
                 </div>
               </div>
+              <div className="lg:col-span-2 mt-2">
+                <p className="text-xs font-bold uppercase tracking-widest text-gray-500">Bookings</p>
+              </div>
               <div>
-                <div className="editor-chrome text-[11px] text-gray-500 mb-1">Site timezone — governs slot generation and admin display (client timezone still controls calendar events)</div>
-                <div className="text-sm">
+                <div className="editor-chrome text-[11px] text-gray-500 mb-1">Your time zone</div>
+                <div className="text-sm flex items-center gap-2">
                   <select
-                    value={content.page?.site_time_zone || ''}
+                    value={tzLocal}
                     onChange={async (e) => {
-                      try { await content.updatePage({ site_time_zone: e.target.value || null } as any) }
-                      catch (err: any) { setGlobalError(err?.message) }
+                      const v = e.target.value
+                      setTzLocal(v)
+                      setSchedulingError(null)
+                      try {
+                        await content.updatePage({ site_time_zone: v || null } as any)
+                        setSchedulingSaved(true)
+                        if (schedulingSavedTimeoutRef.current) window.clearTimeout(schedulingSavedTimeoutRef.current)
+                        schedulingSavedTimeoutRef.current = window.setTimeout(() => setSchedulingSaved(false), 2000) as any
+                      } catch (err: any) {
+                        setSchedulingError(err?.message || String(err))
+                      }
                     }}
-                    aria-label="Site timezone"
+                    aria-label="Your time zone"
                     className="px-3 min-h-11 border border-slate-500 rounded-xl text-xs bg-white w-full"
                   >
                     {SITE_TIMEZONES.map((tz) => (<option key={tz.value} value={tz.value}>{tz.label}</option>))}
                   </select>
+                  {schedulingSaved && <span aria-live="polite" className="px-2 py-1 rounded-full bg-green-50 border border-green-200 text-green-700 text-[10px]">Saved ✓</span>}
                 </div>
+                <p className="mt-1 text-[11px] text-gray-500">Your working hours are read in this zone. Clients always see times in their own.</p>
               </div>
               <div>
-                <div className="editor-chrome text-[11px] text-gray-500 mb-1">Working hours start (whole hour, e.g. 09:00)</div>
-                <div className="text-sm">
+                <div className="editor-chrome text-[11px] text-gray-500 mb-1">Working hours — whole hours only (6 am – 10 pm)</div>
+                <div className="flex items-center gap-2 flex-wrap">
                   <select
-                    value={content.page?.site_working_hours_start || ''}
+                    value={whStartLocal}
                     onChange={async (e) => {
                       const v = e.target.value
-                      try { await content.updatePage({ site_working_hours_start: v || null } as any) }
-                      catch (err: any) { setGlobalError(err?.message) }
+                      setWhStartLocal(v)
+                      const effectiveEnd = whEndLocal || content.page?.site_working_hours_end || '17:00'
+                      const startHour = v ? parseInt(v.split(':')[0], 10) : 9
+                      const endHour = effectiveEnd ? parseInt(effectiveEnd.split(':')[0], 10) : 17
+                      let pushEnd: string | null = null
+                      if (v && effectiveEnd && startHour >= endHour) {
+                        const nextH = Math.min(22, startHour + 1)
+                        pushEnd = `${String(nextH).padStart(2, '0')}:00`
+                        setWhEndLocal(pushEnd)
+                      }
+                      setSchedulingError(null)
+                      try {
+                        if (pushEnd) {
+                          await content.updatePage({ site_working_hours_start: v || null, site_working_hours_end: pushEnd } as any)
+                        } else {
+                          await content.updatePage({ site_working_hours_start: v || null } as any)
+                        }
+                        setSchedulingSaved(true)
+                        if (schedulingSavedTimeoutRef.current) window.clearTimeout(schedulingSavedTimeoutRef.current)
+                        schedulingSavedTimeoutRef.current = window.setTimeout(() => setSchedulingSaved(false), 2000) as any
+                      } catch (err: any) { setSchedulingError(err?.message || String(err)) }
                     }}
                     aria-label="Working hours start"
-                    className="px-3 min-h-11 border border-slate-500 rounded-xl text-xs bg-white w-full"
+                    className="px-3 min-h-11 border border-slate-500 rounded-xl text-xs bg-white"
                   >
-                    <option value="">Default (09:00)</option>
-                    {WHOLE_HOURS.map((h) => (<option key={h.value} value={h.value}>{h.label}</option>))}
+                    <option value="">Default (9 am)</option>
+                    {START_HOURS.map((h) => (<option key={h.value} value={h.value}>{h.label}</option>))}
                   </select>
-                </div>
-              </div>
-              <div>
-                <div className="editor-chrome text-[11px] text-gray-500 mb-1">Working hours end (whole hour, e.g. 17:00, must be after start)</div>
-                <div className="text-sm">
+                  <span aria-hidden className="text-sm font-medium">–</span>
                   <select
-                    value={content.page?.site_working_hours_end || ''}
+                    value={whEndLocal}
                     onChange={async (e) => {
                       const v = e.target.value
-                      try { await content.updatePage({ site_working_hours_end: v || null } as any) }
-                      catch (err: any) { setGlobalError(err?.message) }
+                      setWhEndLocal(v)
+                      setSchedulingError(null)
+                      try {
+                        await content.updatePage({ site_working_hours_end: v || null } as any)
+                        setSchedulingSaved(true)
+                        if (schedulingSavedTimeoutRef.current) window.clearTimeout(schedulingSavedTimeoutRef.current)
+                        schedulingSavedTimeoutRef.current = window.setTimeout(() => setSchedulingSaved(false), 2000) as any
+                      } catch (err: any) { setSchedulingError(err?.message || String(err)) }
                     }}
                     aria-label="Working hours end"
-                    className="px-3 min-h-11 border border-slate-500 rounded-xl text-xs bg-white w-full"
+                    className="px-3 min-h-11 border border-slate-500 rounded-xl text-xs bg-white"
                   >
-                    <option value="">Default (17:00)</option>
-                    {WHOLE_HOURS.map((h) => (<option key={h.value} value={h.value}>{h.label}</option>))}
+                    <option value="">Default (5 pm)</option>
+                    {(() => {
+                      // Fix: filter against effective start always, not just when set
+                      const effectiveStart = whStartLocal || content.page?.site_working_hours_start || '09:00'
+                      const sH = parseInt(String(effectiveStart).split(':')[0], 10)
+                      const filtered = END_HOURS.filter(h => parseInt(h.value.split(':')[0], 10) > sH)
+                      return filtered.map((h) => (<option key={h.value} value={h.value}>{h.label}</option>))
+                    })()}
                   </select>
+                  {schedulingSaved && <span aria-live="polite" className="px-2 py-1 rounded-full bg-green-50 border border-green-200 text-green-700 text-[10px]">Saved ✓</span>}
                 </div>
               </div>
               <div>
-                <div className="editor-chrome text-[11px] text-gray-500 mb-1">Working days (comma list 0=Sun … 6=Sat, e.g. 1,2,3,4,5 for Mon-Fri)</div>
-                <div className="text-sm">
-                  <EditableText
-                    value={content.page?.site_working_days || ''}
-                    onSave={async (v) => { try { await content.updatePage({ site_working_days: v || null } as any) } catch (e: any) { setGlobalError(e?.message); throw e } }}
-                    placeholder="1,2,3,4,5"
-                    ariaLabel="Working days"
-                    displayClassName="text-sm"
-                  />
+                <div className="editor-chrome text-[11px] text-gray-500 mb-1">Working days</div>
+                <div role="group" aria-label="Working days" className="grid grid-cols-7 gap-1.5">
+                  {WEEKDAYS.map((d) => {
+                    const active = workingDays.has(d.value)
+                    return (
+                      <button
+                        key={d.value}
+                        type="button"
+                        aria-label={d.full}
+                        aria-pressed={active}
+                        onClick={() => {
+                          const next = new Set(workingDays)
+                          if (next.has(d.value)) next.delete(d.value)
+                          else next.add(d.value)
+                          setWorkingDays(next)
+                          // debounced save
+                          if (workingDaysSaveRef.current) window.clearTimeout(workingDaysSaveRef.current)
+                          workingDaysSaveRef.current = window.setTimeout(async () => {
+                            const str = daysSetToString(next)
+                            setSchedulingError(null)
+                            try {
+                              await content.updatePage({ site_working_days: str } as any)
+                              setSchedulingSaved(true)
+                              if (schedulingSavedTimeoutRef.current) window.clearTimeout(schedulingSavedTimeoutRef.current)
+                              schedulingSavedTimeoutRef.current = window.setTimeout(() => setSchedulingSaved(false), 2000) as any
+                            } catch (err: any) { setSchedulingError((err as any)?.message) }
+                          }, 300)
+                        }}
+                        className={`${active ? 'bg-slate-900 text-white' : 'bg-white border border-slate-500 hover:bg-slate-50'} w-11 h-11 inline-flex items-center justify-center rounded-full text-[11px] font-semibold`}
+                      >
+                        {d.short}
+                      </button>
+                    )
+                  })}
+                </div>
+                <div aria-live="polite" aria-atomic="true" role="status" className="mt-1 min-h-4">
+                  {workingDays.size === 0 ? <p className="text-[11px] text-amber-700">Paused — no days selected, clients cannot book.</p> : schedulingSaved ? <span className="px-2 py-1 rounded-full bg-green-50 border border-green-200 text-green-700 text-[10px]">Saved ✓</span> : null}
                 </div>
               </div>
               <div>
@@ -499,6 +661,20 @@ export function Admin() {
                     displayClassName="text-sm"
                   />
                 </div>
+              </div>
+              <div className="lg:col-span-2">
+                {(() => {
+                  const effTz = tzLocal || content.page?.site_time_zone || 'America/New_York'
+                  const effStart = whStartLocal || content.page?.site_working_hours_start || '09:00'
+                  const effEnd = whEndLocal || content.page?.site_working_hours_end || '17:00'
+                  const daysLabel = formatDaysPreview(workingDays)
+                  const tzShort = formatTimezoneShortLabel(effTz)
+                  const startLabel = formatAmPmLabel(effStart)
+                  const endLabel = formatAmPmLabel(effEnd)
+                  const preview = workingDays.size === 0 ? `Paused — no open days (${tzShort}).` : `Clients can book you ${daysLabel}, ${startLabel} – ${endLabel} ${tzShort}.`
+                  return <p className="text-[11px] text-gray-600" aria-live="polite">{preview}</p>
+                })()}
+                {schedulingError && <p className="mt-1 text-[11px] text-red-700" role="alert">{schedulingError}</p>}
               </div>
             </div>
           </div>
@@ -768,7 +944,13 @@ export function Admin() {
                     <h2 className="text-3xl lg:text-4xl font-black tracking-tight mb-4" style={{ fontFamily: 'Playfair Display, serif' }}>Book a meeting</h2>
                     <p className="text-gray-600 leading-relaxed">Pick a time that works for you. No pitch, just practical next steps.</p>
                   </div>
-                  <CalendarView grouped={calendarSlots} selectedDate={null} onDateSelect={() => {}} excludeToday={excludeToday} slotMinutes={slotMinutes} timeZone={timeZone} setTimeZone={setTimeZone} />
+                  {calLoading ? (
+                    <div className="max-w-md mx-auto text-center py-8">
+                      <div className="animate-pulse text-sm text-gray-500">Loading calendar…</div>
+                    </div>
+                  ) : (
+                    <CalendarView grouped={calendarSlots} selectedDate={null} onDateSelect={() => {}} excludeToday={excludeToday} slotMinutes={slotMinutes} timeZone={timeZone} setTimeZone={setTimeZone} emptyState="No availability with your current settings — check your working days and hours above." />
+                  )}
                 </div>
               </section>
             </div>
