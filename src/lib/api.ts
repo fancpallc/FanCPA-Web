@@ -28,6 +28,11 @@ export interface Page {
   booking_max_per_week?: number | null
   booking_min_notice_days?: number | null
   google_tag_manager_id?: string | null
+  // T4 + T5: site timezone and working hours
+  site_time_zone?: string | null
+  site_working_hours_start?: string | null
+  site_working_hours_end?: string | null
+  site_working_days?: string | null
   sort_order: number
   is_published: number
 }

@@ -1,5 +1,6 @@
 import { getBookingCalendarId, getGcalServiceKey, getResendApiKey, hasOAuthConfig } from '../../../_lib/env'
-import { createBookingEvent, TIMEZONE, getDiagInfo } from '../../../_lib/google-calendar'
+import { createBookingEvent, TIMEZONE, getDiagInfo, buildEventDescription } from '../../../_lib/google-calendar'
+import { patchOAuthEventDriveLink } from '../../../_lib/google-oauth'
 import { sendConfirmationEmail } from '../../../_lib/email'
 import { ensureClientDriveFolder } from '../../../_lib/google-drive'
 
@@ -263,6 +264,28 @@ export const onRequestGet: PagesFunction<Env> = async ({ params, env, request })
             } catch {
               await db.prepare('UPDATE contacts SET drive_folder_url=?1 WHERE id=?2').bind(driveResult.emailFolderUrl, contactId).run().catch(() => {})
             }
+            // T3: patch calendar invite description with Drive link now that it exists (non-blocking)
+            if (driveResult?.yearFolderUrl && calendarEventId && !String(calendarEventId).startsWith('stub-') && !String(calendarEventId).startsWith('missing-')) {
+              try {
+                const calId = getBookingCalendarId(env) || env?.BOOKING_CALENDAR_ID || ''
+                const cancelUrl = `${siteUrl}/api/cancel/${cancelToken}`
+                // Prefer OAuth patch path when configured
+                if (hasOAuthConfig(env) && calId) {
+                  await patchOAuthEventDriveLink(env, calId, calendarEventId, driveResult.yearFolderUrl, {
+                    purpose: pending.purpose,
+                    email: pending.email,
+                    phone: pending.phone,
+                    cancelUrl,
+                    meetLink,
+                  })
+                } else if (calId) {
+                  // SA path fallback would need JWT — attempt via generic builder if token available elsewhere; skip for now as best-effort
+                  console.log(`!!! CONFIRM_DRIVE_PATCH_SA_SKIPPED driveLink=${driveResult.yearFolderUrl}`)
+                }
+              } catch (pe: any) {
+                console.log(`!!! CONFIRM_DRIVE_PATCH_ERROR ${pe?.message} — non-blocking`)
+              }
+            }
           }
         } catch (e: any) {
           if (expectedLive) {
@@ -383,18 +406,20 @@ export const onRequestGet: PagesFunction<Env> = async ({ params, env, request })
           <a href="${escapeHtml(String(driveLink))}" target="_blank" rel="noopener noreferrer" style="display:inline-block;padding:12px 24px;background:#0f172a;color:white;border-radius:999px;text-decoration:none;font-weight:600;font-size:14px;">Upload documents for ${meetingYear} →</a>
         </div>` : ''}
 
-        <!-- 3. Join link -->
+        <!-- 3. T2: full Meet URL with copy button, no Open Meet duplicate, ICS via server endpoint (not inline onclick) -->
         ${safeMeet ? `<div style="margin:16px 0;padding:12px;background:white;border:1px solid #e2e8f0;border-radius:8px;">
-          <p style="margin:0 0 8px;font-weight:600;">Join link</p>
-          <a href="${escapeHtml(safeMeet)}" target="_blank" rel="noopener noreferrer" style="color:#0f172a;text-decoration:underline;word-break:break-all;">Open Meet →</a>
-          <p style="font-size:12px;color:#64748b;margin:8px 0 0;">Add to your calendar from the invite in your inbox — no extra .ics needed.</p>
+          <p style="margin:0 0 8px;font-weight:600;">Google Meet link</p>
+          <div style="display:flex;gap:8px;align-items:center;flex-wrap:wrap;">
+            <input readonly value="${escapeHtml(safeMeet)}" style="flex:1;min-width:220px;padding:8px 10px;border:1px solid #e2e8f0;border-radius:8px;font-size:13px;word-break:break-all;" onclick="this.select()" aria-label="Google Meet link" />
+            <button type="button" style="padding:8px 14px;background:#0f172a;color:white;border-radius:999px;font-size:13px;font-weight:600;border:0;cursor:pointer;" onclick='navigator.clipboard.writeText(${JSON.stringify(safeMeet)}).then(()=>{this.textContent="Copied"; setTimeout(()=>this.textContent="Copy",2000)}).catch(()=>{this.textContent="Copy failed"})'>Copy</button>
+          </div>
         </div>` : `<div style="margin:16px 0;padding:12px;background:#fffbeb;border:1px solid #fde68a;border-radius:8px;font-size:13px;color:#92400e;">Meet link will be sent shortly — your slot is blocked.</div>`}
 
-        <!-- P0 #3 fix: GET no longer one-click cancel (interstitial prevents Safe Links/prefetcher). Explain two-step. -->
-        <p style="margin-top:16px;font-size:13px;color:#475569;">Need to cancel? You can cancel up to 24 hours before via your confirmation email or this link — you’ll confirm on the next page to prevent accidental clicks. <a href="${escapeHtml(cancelUrl)}" style="color:#dc2626;text-decoration:underline;">Cancel meeting</a>.</p>
+        <!-- Cancel policy -->
+        <p style="margin-top:16px;font-size:13px;color:#475569;">Need to cancel? You can cancel up to 24 hours before via your confirmation email or this link — you'll confirm on the next page to prevent accidental clicks. <a href="${escapeHtml(cancelUrl)}" style="color:#dc2626;text-decoration:underline;">Cancel meeting</a>.</p>
 
         <div style="margin-top:24px;display:flex;gap:12px;flex-wrap:wrap;justify-content:center;">
-          ${safeMeet ? `<a href="${escapeHtml(safeMeet)}" target="_blank" style="padding:12px 24px;background:white;border:1px solid #e2e8f0;border-radius:999px;text-decoration:none;color:#0f172a;font-weight:600;font-size:14px;">Open Meet</a>` : ''}
+          <a href="/api/booking/${escapeHtml(bookingId)}/invite.ics" style="padding:12px 24px;background:white;border:1px solid #e2e8f0;border-radius:999px;text-decoration:none;color:#0f172a;font-weight:600;font-size:14px;">Download .ics</a>
           <a href="/" style="padding:12px 24px;background:white;border:1px solid #e2e8f0;border-radius:999px;text-decoration:none;color:#0f172a;font-weight:600;font-size:14px;">Back to home</a>
         </div>
       </div>

@@ -1321,3 +1321,243 @@ confirm page. These are the four that cost bookings.
 **V6 needs a decision now, ahead of any of it:** the admin's "Notify client by email?" checkbox does not
 control whether the client is emailed. Either drop `sendUpdates=all` when the box is unchecked, or
 relabel the checkbox to describe what it actually does.
+
+---
+
+# Rev 5 — requested changes, verified 2026-08-29
+
+Checked against the working tree after Rev 4 landed (suite green: lint, build, 93 frontend + 275 worker
+tests). No code written for these — verification only.
+
+| # | Ask | Verdict | Anchor |
+|---|---|---|---|
+| T1 | Nav links dead on the client portal | ✅ valid — and worse than "dead" for Home | `Nav.tsx:19-25,55-62,76` |
+| T2 | Keep `.ics`, drop "Open Meet", show full Meet URL + copy button | ✅ valid | `confirm/[token].ts:389-397` |
+| T3 | Put purpose + Drive link in the Calendar invite | ⚠️ purpose **already there**; Drive link is not, and ordering blocks the simple fix | `google-oauth.ts:113`, `confirm/[token].ts:166,229` |
+| T4 | Admin-selectable timezone under "Your site"; admin table in admin's zone, mention client's | ✅ valid — clear precedent exists, but one hidden dependency makes it bigger than it looks | `Admin.tsx:308`, `google-calendar.ts:93,95-120` |
+| T5 | Admin-selectable working start/end, whole-hour slots only | ✅ valid — whole-hour is already guaranteed, but only if the inputs are whole hours | `slots.ts:67-73`, `google-calendar.ts:48-59,145` |
+
+---
+
+## T1. Nav links do nothing on `/client-portal`
+
+Valid, and the Home link is the worst of the set — it does something actively wrong rather than nothing.
+
+**Section links** (`Nav.tsx:19-25`) use bare fragments — `#services`, `#about`, `#testimonials`,
+`#work`. On `/client-portal` those resolve to `/client-portal#services`. That page renders only the
+email form, so there is no matching element and the click is inert. Same for **"Book a free call"**
+(`:76`, `href="#calendar"`). The mobile menu reuses the same `sectionLinks` array, so it has the
+identical problem.
+
+**The wordmark** (`:55-62`) is different:
+
+```tsx
+<a href="/" onClick={(e) => {
+  e.preventDefault()
+  window.scrollTo({ top: 0, behavior: 'smooth' })
+  window.history.pushState(null, '', '/')
+}}>
+```
+
+`App.tsx:16` reads `window.location.pathname` **once at render**, and there is no router and no
+`popstate` listener. So on the client portal this rewrites the address bar to `/` and scrolls to the
+top while leaving the Client Portal form on screen. The URL and the content disagree, and a refresh
+then silently swaps the page. That is a worse failure than an inert link, because the user has no
+signal anything happened.
+
+**Fix:**
+- Make the section links and the CTA root-relative: `/#services`, `/#about`, `/#testimonials`,
+  `/#work`, `/#calendar`. They then work from any page and keep working on the home page.
+- Gate the wordmark's `preventDefault()` on `window.location.pathname === '/'`. Off the home page,
+  let the browser navigate normally. The smooth-scroll behaviour is worth keeping *on* the home page,
+  which is presumably why the handler exists.
+
+**Scope:** any page that renders `<Layout>` and is not `/`. Today that is `/client-portal` only, but
+the bug is in `Nav`, so every future page inherits it.
+
+---
+
+## T2. Confirm page — restore `.ics`, drop "Open Meet", show the full Meet link with a copy button
+
+Valid. Current state at `functions/api/booking/confirm/[token].ts`:
+
+- **"Open Meet" appears twice** — an inline text link (`:389`) and again as a pill in the button row
+  (`:397`). Both should go.
+- **The `.ics` button was removed in Rev 4.** The only remaining trace is a copy line at `:390`:
+  *"Add to your calendar from the invite in your inbox — no extra .ics needed."* That sentence has to
+  go with the change, or the page will contradict the button sitting next to it.
+
+Two implementation constraints worth deciding up front, because both were the cause of earlier P0s:
+
+1. **Do not re-add `.ics` as an inline `onclick`.** The previous implementation interpolated
+   `first_name` / `purpose` into a single-quoted JS string inside an HTML attribute; a client named
+   `O'Brien`, or a purpose containing an apostrophe, made the handler fail to parse and the button
+   silently did nothing. `escapeHtml` does not fix that — the HTML parser decodes the entity before JS
+   sees it. Ship it as a server endpoint instead: `GET /api/booking/:id/invite.ics`, `Content-Type:
+   text/calendar`, `Content-Disposition: attachment; filename="meeting.ics"`. That also lets you emit
+   a proper `UID` and `DTSTAMP`, which the old inline generator omitted and Outlook wants.
+2. **The copy button needs JS on a page that loads none.** The page is a single self-contained HTML
+   string with no site bundle. Options, in order of preference: a `<input readonly>` holding the URL
+   that the user can select and copy with no JS at all; or a minimal inline handler calling
+   `navigator.clipboard.writeText` with the URL injected as a JSON-encoded literal. A Meet URL contains
+   no apostrophes, so the injection risk is lower than the `.ics` case — but it is the same shape of
+   bug, and any future `script-src` CSP would block it.
+
+**Preserve the no-Meet path.** `safeMeet` (`:362`) is `null` whenever Google returned a `fake-` link,
+and the page currently degrades to "We're still generating your video link". The new full-URL + copy
+block must sit behind the same guard, or clients with no Meet link get an empty box and a copy button
+that copies nothing.
+
+---
+
+## T3. Purpose and Drive link in the Google Calendar invite
+
+**Purpose is already there.** Every event description begins with it —
+`google-oauth.ts:113` and `:215`, `google-calendar.ts:647` and `:802`:
+
+```ts
+description: `${params.purpose || 'Intro call'}\n\nContact: ${params.email} …\n\nCancel: …`
+```
+
+So half of this ask is done. If it is not showing up in the invite, that is a different problem
+(likely the bare-event retry path, which drops to a reduced payload) and worth checking against a real
+invite rather than the code.
+
+**The Drive link is genuinely absent** from all four description strings.
+
+**The obstacle is ordering, and it is deliberate.** In the public flow the calendar event is created at
+`confirm/[token].ts:166`, and the Drive folder is only ensured at `:229`. The Drive URL does not exist
+yet when the event is built. That order is intentional: Drive is non-blocking (`:234-275`) so a Drive
+outage cannot fail a booking, and the calendar event has to exist first so a retry cannot leak
+duplicate events.
+
+Options:
+
+- **(a) Patch the description after the Drive step — recommended.** There is already a post-create
+  `PATCH` that rewrites the description to add the Meet link (`google-oauth.ts:215`,
+  `google-calendar.ts:802`), so the mechanism exists. It currently lives inside the calendar module,
+  which has no access to `driveLink`, so the cleanest version is a small exported helper called from
+  `confirm/[token].ts` after the Drive upsert, wrapped in try/catch so a patch failure stays
+  non-blocking like the rest of the Drive path.
+- **(b) The admin path can do it inline.** `manual.ts` runs Drive at step 2 and the calendar at step 3,
+  so `driveLink` *is* available at create time there. That half needs no patching.
+
+Note the invite already carries a cancel URL in the description. Adding a Drive link makes the
+description four labelled lines; worth formatting deliberately rather than appending.
+
+---
+
+## T4. Admin-selectable site timezone
+
+Valid, no setting exists today, and there is a clean precedent — but one dependency makes this larger
+than a dropdown.
+
+**Current state.** `google-calendar.ts:93` is a module constant:
+
+```ts
+export const TIMEZONE = 'America/New_York' // Eastern, configurable in admin later via var TIMEZONE
+```
+
+`env?.TIMEZONE` is read at `:644` as an override, but it is **declared nowhere** — not in
+`wrangler.toml`, not in `.dev.vars.example`. So the override the comment advertises is unreachable in
+practice, and the value is effectively hardcoded.
+
+**The precedent is exact.** Site-level settings already live on the `pages` table, each added by its own
+migration: `site_name`, `footer_tagline` (0008), `icon_url` (0009), `booking_max_per_week` (0010),
+`google_tag_manager_id` (0012), `booking_min_notice_days` (0013). The admin PATCH endpoint gates them
+with an allowlist at `functions/api/admin/pages/[slug].ts:13` plus per-field validation. Adding
+`site_time_zone TEXT` in migration `0017` and one entry to `EDITABLE` follows the established path,
+and the "Your site" block (`Admin.tsx:308`) is the right home for the control.
+
+**Define the precedence chain explicitly**, because there are now four sources:
+per-booking `time_zone` (the client's) → `pages.site_time_zone` → `env.TIMEZONE` → the
+`America/New_York` constant. Rev 3's R5 deliberately made the *calendar event* use the **client's**
+zone; the new admin setting should govern slot generation and admin display, and must not silently
+override that.
+
+**The hidden dependency — this is the real work.** `computeSlotsForDay` converts working hours to UTC
+through two Eastern-specific helpers, `getEasternOffsetHours` (`:95-115`) and `easternWallTimeToUtcIso`
+(`:117-120`), called at `:143` and `:149`. Both are written around `TIMEZONE`. If the site timezone
+becomes configurable but those are left alone, working hours will keep being interpreted as Eastern
+regardless of the setting — the dropdown would appear to work while producing slots at the wrong wall
+time. Generalising that conversion is the bulk of T4 and is easy to miss when scoping it.
+
+**Admin table display.** `AdminClients.tsx:1257` currently renders
+`formatNiceDateTime(r.slot_start, r.time_zone)` — the **client's** zone. The ask is the admin's zone
+primary with the client's mentioned, e.g. `Sep 15, 10:00 AM EDT · client 7:00 AM PDT`. `formatNiceDateTime`
+already emits `timeZoneName: 'short'`, so this is a formatting change, not new plumbing. Note the
+Timezone column was removed in Rev 4 precisely because the time cell carries the zone — keep it that
+way and put both zones in the one cell.
+
+---
+
+## T5. Admin-selectable working start/end, whole-hour slots
+
+Valid, and the whole-hour requirement is **already guaranteed** — but only as long as the start time
+is itself a whole hour.
+
+**Current state.** Working hours come from environment variables only (`slots.ts:67-73`):
+
+```ts
+start: env?.WORKING_HOURS_START || '09:00',
+end:   env?.WORKING_HOURS_END   || '17:00',
+days:  parseWorkingDays(env?.WORKING_DAYS),
+slotMinutes: normalizeSlotMinutes(env?.SLOT_DURATION_MINUTES || '60'),
+```
+
+There is no admin control, and like `TIMEZONE` these env vars are not declared in `wrangler.toml` or
+`.dev.vars.example`.
+
+**Slot length is already locked to 60 minutes.** `normalizeSlotMinutes` (`google-calendar.ts:48-59`)
+ignores its argument entirely and hard-returns `60`, with the comment "always 60 mins per requirement".
+So `SLOT_DURATION_MINUTES` is inert, and every slot is an hour long.
+
+**The whole-o'clock catch.** `computeSlotsForDay:145` iterates:
+
+```ts
+for (let mins = startMins; mins + slotMinutes <= endMins; mins += slotMinutes)
+```
+
+Slots are struck from `start`, in 60-minute steps. A start of `09:00` yields 9, 10, 11 … as intended —
+but a start of `09:30` yields **9:30, 10:30, 11:30**, breaking the whole-hour rule the moment an admin
+picks a non-round start. So the requirement translates to a hard constraint on the input:
+
+- Constrain the admin control to whole hours (a `<select>` of `06:00 … 22:00`, not a free
+  `<input type="time">`), **and** validate server-side in the `EDITABLE` allowlist — the UI must not be
+  the only guard, matching how `booking_min_notice_days` is validated at `pages/[slug].ts:69`.
+- Or snap `startMins` down to the hour inside `computeSlotsForDay`. Cheaper, but it silently ignores
+  what the admin typed, which is worse UX.
+
+Recommend the constrained select plus server validation.
+
+**Storage and precedence.** Same treatment as T4 — `site_working_hours_start` / `_end` (and optionally
+`site_working_days`) on `pages` in migration `0017`, added to `EDITABLE`, surfaced in "Your site".
+One wrinkle: the existing precedence for `booking_min_notice_days` in `slots.ts:63-65` is
+**env wins over DB**. If the admin setting is to be meaningful it should be the other way round, or an
+env var set once during setup will silently override the admin UI forever. Pick one and apply it
+consistently to notice-days, timezone and working hours.
+
+**Validation to include:** end must be after start; both whole hours; a sane range (e.g. 06:00–22:00);
+and reject a window shorter than one slot, which would otherwise produce a calendar with no
+availability and no explanation.
+
+---
+
+## Rev 5 — suggested grouping
+
+**PR-12a — nav (T1).** Self-contained, one file, no migration. Ship first; it is the only item where a
+visitor is currently stuck on a page with no working navigation.
+
+**PR-12b — confirm page (T2).** The `.ics` server endpoint plus the Meet-link/copy block. Decide the
+no-JS-vs-inline-handler question before starting.
+
+**PR-12c — site settings (T4 + T5).** One migration (`0017`), one allowlist change, one "Your site" UI
+block, and the precedence decision. These two belong together — same table, same endpoint, same form,
+and both are meaningless until the Eastern-hardcoded slot conversion is generalised.
+
+**PR-12d — Calendar invite Drive link (T3).** Small, but touches the live Google path, which still has
+no automated coverage. Verify against a real invite.
+
+**Needs a decision:** whether env or DB wins for site settings (T4/T5); whether the copy button is
+allowed to use inline JS (T2); and whether the client's timezone continues to govern the calendar
+event while the admin's governs slots and display (T4).

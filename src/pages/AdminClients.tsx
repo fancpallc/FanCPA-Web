@@ -59,6 +59,28 @@ function formatNiceDateTime(iso?: string, tz?: string): string {
   }
 }
 
+/** T4: admin table shows admin's zone primary, client zone mentioned when different */
+function formatAdminMeetingTime(iso?: string, clientTz?: string, adminTz?: string): string {
+  if (!iso) return 'N/A'
+  try {
+    const admin = new Date(iso).toLocaleString('en-US', {
+      month: 'short', day: 'numeric', hour: 'numeric', minute: '2-digit', hour12: true,
+      timeZone: adminTz || undefined, timeZoneName: 'short',
+    })
+    if (!clientTz || !adminTz || clientTz === adminTz) return admin
+    try {
+      const client = new Date(iso).toLocaleString('en-US', {
+        hour: 'numeric', minute: '2-digit', hour12: true, timeZone: clientTz, timeZoneName: 'short',
+      })
+      return `${admin} · client ${client}`
+    } catch {
+      return admin
+    }
+  } catch {
+    return iso
+  }
+}
+
 function isoToDatetimeLocal(iso?: string): string {
   if (!iso) return ''
   try {
@@ -136,6 +158,15 @@ export default function AdminClients() {
   const [endDate, setEndDate] = useState('')
   const [showHidden, setShowHidden] = useState(false)
   const [clients, setClients] = useState<AdminClientCard[]>([])
+  // T4: site timezone for admin display — fetched from pages content
+  const [siteTimeZone, setSiteTimeZone] = useState<string>('')
+  useEffect(() => {
+    // Fetch site_time_zone from public content (cheap, no auth needed)
+    fetch('/api/content/home', { cache: 'no-store' as any } as any).then(r=>r.json()).then((j:any)=>{
+      const tz = j?.page?.site_time_zone
+      if (tz) setSiteTimeZone(tz)
+    }).catch(()=>{})
+  }, [])
   const [searchLoading, setSearchLoading] = useState(false)
   const [createLoading, setCreateLoading] = useState(false)
   const [deleteLoading, setDeleteLoading] = useState(false)
@@ -1012,7 +1043,7 @@ export default function AdminClients() {
               <>
                 <h2 id="delete-booking-title" className="text-lg font-bold mb-2">Cancel meeting</h2>
                 <p className="mb-3 text-sm text-slate-600">This will remove the Google Calendar event and keep the row as Cancelled. The calendar event cannot be restored - rebooking creates a new invite. The clients existing cancel link keeps working.</p>
-                <p className="mb-4 text-sm">Cancel meeting for {deleteTarget.client.first_name} {deleteTarget.client.last_name} at {deleteTarget.meeting.slot_start ? formatNiceDateTime(deleteTarget.meeting.slot_start, deleteTarget.meeting.time_zone) : 'N/A'}?</p>
+                <p className="mb-4 text-sm">Cancel meeting for {deleteTarget.client.first_name} {deleteTarget.client.last_name} at {deleteTarget.meeting.slot_start ? formatAdminMeetingTime(deleteTarget.meeting.slot_start, deleteTarget.meeting.time_zone, siteTimeZone || 'America/New_York') : 'N/A'}?</p>
                 <label className="flex items-center gap-2 mb-4 text-sm">
                   <input type="checkbox" checked={notifyClientChecked} onChange={(e) => setNotifyClientChecked(e.target.checked)} />
                   Notify client by email?
@@ -1027,7 +1058,7 @@ export default function AdminClients() {
               <>
                 <h2 id="delete-booking-title" className="text-lg font-bold mb-2">Hide meeting</h2>
                 <p className="mb-3 text-sm text-slate-600">This hides the row from the list. No calendar event is deleted and no email is sent. You can restore it via Show hidden toggle.</p>
-                <p className="mb-4 text-sm">Hide meeting for {deleteTarget.client.first_name} {deleteTarget.client.last_name} at {deleteTarget.meeting.slot_start ? formatNiceDateTime(deleteTarget.meeting.slot_start, deleteTarget.meeting.time_zone) : 'N/A'}?</p>
+                <p className="mb-4 text-sm">Hide meeting for {deleteTarget.client.first_name} {deleteTarget.client.last_name} at {deleteTarget.meeting.slot_start ? formatAdminMeetingTime(deleteTarget.meeting.slot_start, deleteTarget.meeting.time_zone, siteTimeZone || 'America/New_York') : 'N/A'}?</p>
                 <div className="flex justify-end gap-2">
                   <button ref={deleteCancelRef} type="button" onClick={() => setDeleteTarget(null)} className="px-4 py-2 rounded-full border text-sm min-h-11">Keep visible</button>
                   <button type="button" onClick={handleHideBooking} disabled={deleteLoading} className="bg-slate-900 text-white px-4 py-2 rounded-full text-sm min-h-11 disabled:opacity-50">{deleteLoading ? 'Hiding...' : 'Hide'}</button>
@@ -1254,7 +1285,7 @@ export default function AdminClients() {
                                   <td className="p-2">
                                     {r.booking_id ? <input type="checkbox" data-booking-id={r.booking_id} data-testid={`meeting-${r.booking_id}`} disabled={getRowStatus(r) === 'hidden'} aria-label={`${isUpcomingConfirmed(r) ? 'Select' : 'Select for hide'} ${r.slot_start ? formatNiceDateTime(r.slot_start, r.time_zone) : ''}`} checked={selSet.has(r.booking_id!)} onChange={() => toggleMeeting(client.contact_id, r.booking_id!)} /> : null}
                                   </td>
-                                  <td className="p-2 whitespace-nowrap">{r.slot_start ? formatNiceDateTime(r.slot_start, r.time_zone) : '-'}</td>
+                                  <td className="p-2 whitespace-nowrap">{r.slot_start ? formatAdminMeetingTime(r.slot_start, r.time_zone, siteTimeZone || 'America/New_York') : '-'}</td>
                                   <td className="p-2">
                                     {(() => {
                                       const p = r.purpose || ''
@@ -1281,7 +1312,7 @@ export default function AdminClients() {
                             <div key={r.booking_id || `${r.contact_id}-no-id`} className="p-3 flex gap-3">
                               {r.booking_id ? <input type="checkbox" data-booking-id={r.booking_id} data-testid={`meeting-${r.booking_id}-mobile`} disabled={status === 'hidden'} aria-label={`${status} ${r.slot_start ? formatNiceDateTime(r.slot_start, r.time_zone) : ''}`} checked={selSet.has(r.booking_id!)} onChange={() => toggleMeeting(client.contact_id, r.booking_id!)} className="mt-1" /> : null}
                               <div className="flex-1 min-w-0">
-                                <div className="font-medium text-sm">{r.slot_start ? formatNiceDateTime(r.slot_start, r.time_zone) : '-'}</div>
+                                <div className="font-medium text-sm">{r.slot_start ? formatAdminMeetingTime(r.slot_start, r.time_zone, siteTimeZone || 'America/New_York') : '-'}</div>
                                 <div className="text-xs text-slate-500">
                                   {(() => {
                                     const p = r.purpose || 'No purpose'

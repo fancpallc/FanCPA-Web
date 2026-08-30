@@ -52,6 +52,22 @@ function formatStorage(megabytes: number): string {
   return megabytes >= 1024 ? `${(megabytes / 1024).toFixed(1)} GB` : `${megabytes} MB`
 }
 
+const SITE_TIMEZONES = [
+  { value: '', label: 'Default (America/New_York)' },
+  { value: 'America/New_York', label: 'Eastern - New York' },
+  { value: 'America/Chicago', label: 'Central - Chicago' },
+  { value: 'America/Denver', label: 'Mountain - Denver' },
+  { value: 'America/Los_Angeles', label: 'Pacific - Los Angeles' },
+  { value: 'America/Anchorage', label: 'Alaska - Anchorage' },
+  { value: 'Pacific/Honolulu', label: 'Hawaii - Honolulu' },
+  { value: 'UTC', label: 'UTC' },
+]
+const WHOLE_HOURS = Array.from({ length: 17 }, (_, i) => {
+  const h = 6 + i // 06..22
+  const v = `${String(h).padStart(2, '0')}:00`
+  return { value: v, label: v }
+})
+
 function getOldKeyFromUrl(url?: string | null): string | undefined {
   if (!url) return undefined
   try {
@@ -405,6 +421,70 @@ export function Admin() {
                     multiline
                     ariaLabel="Search description"
                     displayClassName="text-sm text-gray-600"
+                  />
+                </div>
+              </div>
+              <div>
+                <div className="editor-chrome text-[11px] text-gray-500 mb-1">Site timezone — governs slot generation and admin display (client timezone still controls calendar events)</div>
+                <div className="text-sm">
+                  <select
+                    value={content.page?.site_time_zone || ''}
+                    onChange={async (e) => {
+                      try { await content.updatePage({ site_time_zone: e.target.value || null } as any) }
+                      catch (err: any) { setGlobalError(err?.message) }
+                    }}
+                    aria-label="Site timezone"
+                    className="px-3 min-h-11 border border-slate-500 rounded-xl text-xs bg-white w-full"
+                  >
+                    {SITE_TIMEZONES.map((tz) => (<option key={tz.value} value={tz.value}>{tz.label}</option>))}
+                  </select>
+                </div>
+              </div>
+              <div>
+                <div className="editor-chrome text-[11px] text-gray-500 mb-1">Working hours start (whole hour, e.g. 09:00)</div>
+                <div className="text-sm">
+                  <select
+                    value={content.page?.site_working_hours_start || ''}
+                    onChange={async (e) => {
+                      const v = e.target.value
+                      try { await content.updatePage({ site_working_hours_start: v || null } as any) }
+                      catch (err: any) { setGlobalError(err?.message) }
+                    }}
+                    aria-label="Working hours start"
+                    className="px-3 min-h-11 border border-slate-500 rounded-xl text-xs bg-white w-full"
+                  >
+                    <option value="">Default (09:00)</option>
+                    {WHOLE_HOURS.map((h) => (<option key={h.value} value={h.value}>{h.label}</option>))}
+                  </select>
+                </div>
+              </div>
+              <div>
+                <div className="editor-chrome text-[11px] text-gray-500 mb-1">Working hours end (whole hour, e.g. 17:00, must be after start)</div>
+                <div className="text-sm">
+                  <select
+                    value={content.page?.site_working_hours_end || ''}
+                    onChange={async (e) => {
+                      const v = e.target.value
+                      try { await content.updatePage({ site_working_hours_end: v || null } as any) }
+                      catch (err: any) { setGlobalError(err?.message) }
+                    }}
+                    aria-label="Working hours end"
+                    className="px-3 min-h-11 border border-slate-500 rounded-xl text-xs bg-white w-full"
+                  >
+                    <option value="">Default (17:00)</option>
+                    {WHOLE_HOURS.map((h) => (<option key={h.value} value={h.value}>{h.label}</option>))}
+                  </select>
+                </div>
+              </div>
+              <div>
+                <div className="editor-chrome text-[11px] text-gray-500 mb-1">Working days (comma list 0=Sun … 6=Sat, e.g. 1,2,3,4,5 for Mon-Fri)</div>
+                <div className="text-sm">
+                  <EditableText
+                    value={content.page?.site_working_days || ''}
+                    onSave={async (v) => { try { await content.updatePage({ site_working_days: v || null } as any) } catch (e: any) { setGlobalError(e?.message); throw e } }}
+                    placeholder="1,2,3,4,5"
+                    ariaLabel="Working days"
+                    displayClassName="text-sm"
                   />
                 </div>
               </div>

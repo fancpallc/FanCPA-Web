@@ -215,6 +215,7 @@ export async function onRequestPost({ request, env }: { request: Request; env: a
       cancelToken,
       siteUrl: env?.SITE_URL,
       timeZone: browserTz,
+      driveFolderUrl: driveLink || undefined,
     })
     // C1: confirm/[token].ts:148 already does this — expectedLive && source stub → 502
     if (expectedLive && calResult?.source === 'stub') {

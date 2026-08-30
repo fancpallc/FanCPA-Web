@@ -10,7 +10,7 @@ export interface Env {
 }
 
 /** Fields the owner may edit. `slug` and `id` are deliberately not among them. */
-const EDITABLE = ['site_name', 'footer_tagline', 'icon_url', 'title', 'meta_description', 'booking_max_per_week', 'booking_min_notice_days', 'google_tag_manager_id'] as const
+const EDITABLE = ['site_name', 'footer_tagline', 'icon_url', 'title', 'meta_description', 'booking_max_per_week', 'booking_min_notice_days', 'google_tag_manager_id', 'site_time_zone', 'site_working_hours_start', 'site_working_hours_end', 'site_working_days'] as const
 
 /** Long enough for a name or a sentence; short enough that the header cannot be broken. */
 const MAX_LENGTH: Record<(typeof EDITABLE)[number], number> = {
@@ -22,6 +22,34 @@ const MAX_LENGTH: Record<(typeof EDITABLE)[number], number> = {
   booking_max_per_week: 10,
   booking_min_notice_days: 10,
   google_tag_manager_id: 50,
+  site_time_zone: 50,
+  site_working_hours_start: 10,
+  site_working_hours_end: 10,
+  site_working_days: 30,
+}
+
+const VALID_TIMEZONES = [
+  'America/New_York', 'America/Chicago', 'America/Denver', 'America/Los_Angeles',
+  'America/Anchorage', 'Pacific/Honolulu', 'UTC',
+]
+const WHOLE_HOUR_RE = /^(0[6-9]|1[0-9]|2[0-2]):00$/
+
+function isWholeHourTime(v: string): boolean {
+  return WHOLE_HOUR_RE.test(v.trim())
+}
+function parseMins(t: string): number {
+  const m = /^(\d{1,2}):(\d{2})$/.exec(t.trim())
+  if (!m) return -1
+  const h = parseInt(m[1], 10), mm = parseInt(m[2], 10)
+  if (isNaN(h) || isNaN(mm)) return -1
+  return h * 60 + mm
+}
+function isValidIanaZone(tz: string): boolean {
+  if (!tz) return false
+  try {
+    new Intl.DateTimeFormat('en-US', { timeZone: tz })
+    return true
+  } catch { return false }
 }
 
 /**
@@ -77,6 +105,32 @@ export const onRequestPut: PagesFunction<Env> = async ({ request, env, params })
         return new Response(JSON.stringify({ error: 'GTM ID must start with GTM-' }), { status: 400, headers })
       }
     }
+    // T4: site_time_zone — must be valid IANA, allow empty/null to reset
+    if (field === 'site_time_zone') {
+      if (value === null || value === '') continue
+      if (typeof value !== 'string') return new Response(JSON.stringify({ error: 'site_time_zone must be text' }), { status: 400, headers })
+      if (!isValidIanaZone(value)) return new Response(JSON.stringify({ error: `Invalid timezone: ${value}. Use IANA like America/New_York` }), { status: 400, headers })
+      continue
+    }
+    // T5: working_hours start/end — whole-hour, 06:00–22:00, length guard
+    if (field === 'site_working_hours_start' || field === 'site_working_hours_end') {
+      if (value === null || value === '') continue
+      if (typeof value !== 'string') return new Response(JSON.stringify({ error: `${field} must be text` }), { status: 400, headers })
+      if (!isWholeHourTime(value)) return new Response(JSON.stringify({ error: `${field} must be whole hour like 09:00 (06:00–22:00)` }), { status: 400, headers })
+      continue
+    }
+    if (field === 'site_working_days') {
+      if (value === null || value === '') continue
+      if (typeof value !== 'string') return new Response(JSON.stringify({ error: 'site_working_days must be text like 1,2,3,4,5' }), { status: 400, headers })
+      // basic shape: comma list 0-6
+      const parts = value.split(',').map(s => s.trim()).filter(Boolean)
+      if (parts.length === 0) return new Response(JSON.stringify({ error: 'site_working_days cannot be empty if set — use 1,2,3,4,5 or null to reset' }), { status: 400, headers })
+      for (const p of parts) {
+        const n = parseInt(p, 10)
+        if (isNaN(n) || n < 0 || n > 6) return new Response(JSON.stringify({ error: `Invalid working day: ${p} — must be 0-6` }), { status: 400, headers })
+      }
+      continue
+    }
     if (value !== null && typeof value !== 'string') {
       return new Response(JSON.stringify({ error: `${field} must be text` }), { status: 400, headers })
     }
@@ -88,6 +142,30 @@ export const onRequestPut: PagesFunction<Env> = async ({ request, env, params })
     if ((field === 'site_name' || field === 'title') && typeof value === 'string' && !value.trim()) {
       return new Response(JSON.stringify({ error: `${field === 'site_name' ? 'Your site name' : 'The browser tab title'} cannot be empty` }), { status: 400, headers })
     }
+  }
+
+  // T5 cross-field: if either start/end supplied, validate window against existing or both new
+  try {
+    const startSupplied = patch.includes('site_working_hours_start')
+    const endSupplied = patch.includes('site_working_hours_end')
+    if (startSupplied || endSupplied) {
+      // Need to read existing to validate pair
+      const existingPre = await db.prepare('SELECT site_working_hours_start, site_working_hours_end FROM pages WHERE slug = ?').bind(slug).first() as any
+      const effStart = (startSupplied ? String(body.site_working_hours_start || '').trim() : existingPre?.site_working_hours_start || '09:00') || '09:00'
+      const effEnd = (endSupplied ? String(body.site_working_hours_end || '').trim() : existingPre?.site_working_hours_end || '17:00') || '17:00'
+      // Only validate when both are non-empty (allow clearing one)
+      if (effStart && effEnd) {
+        const s = parseMins(effStart)
+        const e = parseMins(effEnd)
+        if (s >= 0 && e >= 0) {
+          if (e <= s) return new Response(JSON.stringify({ error: `Working hours end (${effEnd}) must be after start (${effStart})` }), { status: 400, headers })
+          if (e - s < 60) return new Response(JSON.stringify({ error: 'Working hours window too short — needs at least 1 hour' }), { status: 400, headers })
+        }
+      }
+    }
+  } catch (e: any) {
+    // Only surface if it's our validation error (400); otherwise continue to main try
+    if (e?.status === 400 || String(e?.message || '').includes('Working hours')) throw e
   }
 
   try {
