@@ -1,0 +1,10 @@
+ALTER TABLE contacts ADD COLUMN updated_at TEXT;
+ALTER TABLE bookings ADD COLUMN updated_at TEXT;
+ALTER TABLE bookings ADD COLUMN deleted_at TEXT;
+ALTER TABLE bookings ADD COLUMN deleted_reason TEXT;
+ALTER TABLE bookings ADD COLUMN cancelled_at TEXT;
+ALTER TABLE bookings ADD COLUMN cancelled_by TEXT;
+ALTER TABLE bookings ADD COLUMN cancel_notified INTEGER DEFAULT 0;
+CREATE INDEX IF NOT EXISTS idx_bookings_deleted_at ON bookings(deleted_at);
+CREATE INDEX IF NOT EXISTS idx_bookings_updated_at ON bookings(updated_at);
+CREATE INDEX IF NOT EXISTS idx_contacts_updated_at ON contacts(updated_at);
