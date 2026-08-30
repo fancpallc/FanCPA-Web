@@ -11,6 +11,7 @@ export interface CalendarViewProps {
   setTimeZone: (tz: string) => void
   excludeToday?: boolean
   slotMinutes?: number
+  emptyState?: React.ReactNode
 }
 
 const DAY_MS = 24 * 60 * 60 * 1000
@@ -66,16 +67,33 @@ function formatDayShort(date: Date): { dow: string; day: string; month: string; 
   }
 }
 
-export function CalendarView({ grouped, selectedDate, onDateSelect, timeZone, setTimeZone, excludeToday = true, slotMinutes = 30 }: CalendarViewProps) {
+export function CalendarView({ grouped, selectedDate, onDateSelect, timeZone, setTimeZone, excludeToday = true, slotMinutes = 30, emptyState }: CalendarViewProps) {
   const { weeks, selectableSet } = getCalendarGrid(excludeToday)
-  // The badge used to read a flat "Booking opens from tomorrow". On a Friday or a
-  // Saturday tomorrow is a disabled weekend cell in the very same card, so the badge
-  // contradicted the grid two days in seven. Naming the first day that actually has
-  // slots is both correct every day and more useful than "tomorrow" on any of them.
   const firstOpenDay = weeks
     .flat()
-    .filter((d) => selectableSet.has(toDateStr(d)) && ![0, 6].includes(d.getUTCDay()))
+    .filter((d) => selectableSet.has(toDateStr(d)))
     .find((d) => (grouped[toDateStr(d)] || []).some((s) => s.available))
+
+  const hasAnyAvailability = Object.values(grouped).some((daySlots) => daySlots.some((s) => s.available))
+
+  if (!hasAnyAvailability) {
+    // emptyState allows admin preview to avoid client-facing "email us" copy and dead #contact anchor on /admin
+    if (emptyState) {
+      return (
+        <div className="card rounded-2xl p-8 bg-white shadow-sm w-full text-center">
+          <h3 className="text-xl font-black tracking-tight mb-3" style={{ fontFamily: 'Playfair Display, serif' }}>Available times</h3>
+          <div className="text-sm text-gray-600">{emptyState}</div>
+        </div>
+      )
+    }
+    return (
+      <div className="card rounded-2xl p-8 bg-white shadow-sm w-full text-center">
+        <h3 className="text-xl font-black tracking-tight mb-3" style={{ fontFamily: 'Playfair Display, serif' }}>Available times</h3>
+        <p className="text-sm text-gray-600 mb-4 leading-relaxed">We&apos;re not taking new bookings right now — email us and we&apos;ll find a time.</p>
+        <a href="#contact" className="inline-flex items-center px-5 min-h-11 bg-slate-900 text-white rounded-full text-xs font-semibold hover:bg-black">Contact us</a>
+      </div>
+    )
+  }
 
   return (
     <div className="card rounded-2xl p-3 sm:p-6 md:p-8 bg-white shadow-sm w-full">
@@ -85,7 +103,7 @@ export function CalendarView({ grouped, selectedDate, onDateSelect, timeZone, se
             Available times
           </h3>
           <p className="text-xs text-gray-500 mt-1">
-            Pick a weekday in the next two weeks · {slotMinutes}-minute meetings
+            Pick a day in the next two weeks · {slotMinutes}-minute meetings
           </p>
         </div>
         {excludeToday && firstOpenDay && (
@@ -116,8 +134,10 @@ export function CalendarView({ grouped, selectedDate, onDateSelect, timeZone, se
               const availableCount = daySlots.filter((s) => s.available).length
               const hasAvailability = availableCount > 0
               const isSelected = selectedDate === dateStr
-              const isWeekend = [0, 6].includes(d.getUTCDay())
-              const isSelectable = selectableSet.has(dateStr) && !isWeekend && hasAvailability
+              // P0 fix: drop hardcoded weekend exclusion — slots.ts already honours
+              // site_working_days. A day with slots is bookable (weekday or weekend).
+              // Response carries only slots, so cheaper to let hasAvailability decide.
+              const isSelectable = selectableSet.has(dateStr) && hasAvailability
               const isOutsideSelectable = !selectableSet.has(dateStr)
 
               return (
@@ -126,11 +146,10 @@ export function CalendarView({ grouped, selectedDate, onDateSelect, timeZone, se
                   onClick={() => isSelectable && onDateSelect(dateStr)}
                   disabled={!isSelectable}
                   aria-selected={isSelected}
-                  aria-label={`${dow} ${month} ${day}${isSelectable ? ` — ${availableCount} slots available` : isWeekend ? ' — weekend, unavailable' : ' — unavailable'}`}
+                  aria-label={`${dow} ${month} ${day}${isSelectable ? ` — ${availableCount} slots available` : ' — unavailable'}`}
                   className={`flex flex-col items-center justify-start py-3 sm:py-4 px-1 sm:px-2 rounded-2xl border transition-all min-h-[92px] sm:min-h-[96px]
-                    ${isWeekend ? 'bg-gray-50 text-gray-400 border-gray-100 opacity-60' : ''}
                     ${isOutsideSelectable ? 'bg-white text-gray-300 border-gray-100 opacity-40' : ''}
-                    ${!isWeekend && !isOutsideSelectable && !hasAvailability ? 'bg-gray-50 text-gray-400 border-gray-100 opacity-60' : ''}
+                    ${!isOutsideSelectable && !hasAvailability ? 'bg-gray-50 text-gray-400 border-gray-100 opacity-60' : ''}
                     ${hasAvailability && isSelectable && !isSelected ? 'bg-white border-slate-500 hover:border-slate-900 hover:shadow-md' : ''}
                     ${isSelected ? 'bg-slate-900 text-white border-slate-900 shadow-md scale-[1.02]' : ''}
                     ${!isSelectable ? 'cursor-not-allowed' : 'cursor-pointer'}`}
@@ -143,9 +162,8 @@ export function CalendarView({ grouped, selectedDate, onDateSelect, timeZone, se
                       Today
                     </div>
                   ) : null}
-                  {/* At 393px a cell is ~35px wide, so "16 slots" / "Weekend" used to
-                      spill across the cell borders into the neighbouring days. The full
-                      wording lives in the button's aria-label either way. */}
+                  {/* At 393px a cell is ~35px wide, so "16 slots" used to spill across borders.
+                      Full wording lives in the button's aria-label. */}
                   <div className="mt-2 max-w-full">
                     {hasAvailability && selectableSet.has(dateStr) ? (
                       <span className={`inline-block px-2 sm:px-3 py-1 rounded-full text-[10px] sm:text-[11px] leading-none ${isSelected ? 'bg-white text-slate-900' : 'bg-slate-900 text-white'}`}>
@@ -153,7 +171,7 @@ export function CalendarView({ grouped, selectedDate, onDateSelect, timeZone, se
                       </span>
                     ) : (
                       <span className="text-[10px] sm:text-[11px] text-gray-400">
-                        {isWeekend ? (<><span className="sm:hidden">Wknd</span><span className="hidden sm:inline">Weekend</span></>) : isOutsideSelectable ? '' : 'Full'}
+                        {isOutsideSelectable ? '' : 'Full'}
                       </span>
                     )}
                   </div>

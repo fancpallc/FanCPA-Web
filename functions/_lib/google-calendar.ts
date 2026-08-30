@@ -1,5 +1,5 @@
 import { getBookingCalendarId, getPersonalCalendarId, getGcalServiceKey, hasOAuthConfig } from './env'
-import { createBookingEventViaOAuth } from './google-oauth'
+import { createBookingEventViaOAuth, getOAuthAccessToken } from './google-oauth'
 
 export interface WorkingHours {
   start: string // "09:00"
@@ -92,11 +92,13 @@ function slotsOverlap(slotStart: Date, slotEnd: Date, busyStart: Date, busyEnd: 
 
 export const TIMEZONE = 'America/New_York' // Eastern, configurable in admin later via var TIMEZONE
 
-function getEasternOffsetHours(date: Date): number {
+/** Generic offset resolver — was Eastern-only, now accepts any IANA zone */
+export function getTimezoneOffsetHours(timeZone: string, date: Date): number {
+  const safeTz = timeZone || TIMEZONE
   const testDate = new Date(Date.UTC(date.getUTCFullYear(), date.getUTCMonth(), date.getUTCDate(), 12, 0, 0))
   try {
     const fmt = new Intl.DateTimeFormat('en-US', {
-      timeZone: TIMEZONE,
+      timeZone: safeTz,
       timeZoneName: 'longOffset',
     })
     const parts = fmt.formatToParts(testDate)
@@ -105,48 +107,66 @@ function getEasternOffsetHours(date: Date): number {
     if (m) {
       const sign = m[1]
       const h = parseInt(m[2], 10)
-      return sign === '-' ? h : -h
+      // Normalize -0 to 0 — h===0 gives -0 for '+' per JS, which fails Object.is checks
+      return (sign === '-' ? h : -h) || 0
     }
   } catch {}
-  const month = testDate.getUTCMonth()
-  if (month < 2 || month > 10) return 5
-  if (month > 2 && month < 10) return 4
-  return 4
+  // Fallback for Eastern if formatting failed, else assume 0 offset
+  if (safeTz === TIMEZONE || safeTz.includes('New_York') || safeTz.includes('Eastern')) {
+    const month = testDate.getUTCMonth()
+    if (month < 2 || month > 10) return 5
+    if (month > 2 && month < 10) return 4
+    return 4
+  }
+  return 0
 }
 
-function easternWallTimeToUtcIso(year: number, month: number, day: number, hour: number, minute: number, offsetHours: number): string {
+export function getEasternOffsetHours(date: Date): number {
+  return getTimezoneOffsetHours(TIMEZONE, date)
+}
+
+export function wallTimeToUtcIso(year: number, month: number, day: number, hour: number, minute: number, offsetHours: number): string {
   const utcMillis = Date.UTC(year, month, day, hour + offsetHours, minute, 0, 0)
   return new Date(utcMillis).toISOString()
 }
 
+/** Backward compat alias */
+export function easternWallTimeToUtcIso(year: number, month: number, day: number, hour: number, minute: number, offsetHours: number): string {
+  return wallTimeToUtcIso(year, month, day, hour, minute, offsetHours)
+}
+
 export function computeSlotsForDay(
   date: Date,
-  workingHours: { start: string; end: string; slotMinutes?: number; slotDurationMinutes?: number },
-  busyBlocks: BusyBlock[]
+  workingHours: { start: string; end: string; slotMinutes?: number; slotDurationMinutes?: number; timeZone?: string },
+  busyBlocks: BusyBlock[],
+  siteTimeZone?: string
 ): CalendarSlot[] {
   const rawMinutes = workingHours.slotMinutes ?? workingHours.slotDurationMinutes ?? 30
   const slotMinutes = normalizeSlotMinutes(rawMinutes)
   const startMins = parseTime(workingHours.start)
   const endMins = parseTime(workingHours.end)
 
-  if (endMins <= startMins || slotMinutes <= 0) return []
+  if (endMins <= startMins || slotMinutes <= 0) {
+    // T5 guard: log loudly when window invalid so empty calendar is not silent
+    console.log(`!!! COMPUTE_SLOTS_INVALID start=${workingHours.start} end=${workingHours.end} startMins=${startMins} endMins=${endMins} slotMinutes=${slotMinutes} — returning [] (window collapsed or too short)`)
+    return []
+  }
 
   const slots: CalendarSlot[] = []
   const dateStr = toDateString(date)
 
-  // Eastern timezone for now per user request, configurable via TIMEZONE var later
-  // Working hours 09:00-17:00 are interpreted as Eastern wall time, converted to UTC ISO for storage
-  // e.g. 09:00 ET (EDT UTC-4) in July → 13:00 UTC ISO
+  // T4 fix: generalize from Eastern-only to configurable site timezone
+  // Precedence: explicit siteTimeZone param > workingHours.timeZone > TIMEZONE const
+  const effectiveTz = siteTimeZone || (workingHours as any).timeZone || TIMEZONE
   const year = date.getUTCFullYear()
   const month = date.getUTCMonth()
   const day = date.getUTCDate()
-  const offsetHours = getEasternOffsetHours(date)
+  const offsetHours = getTimezoneOffsetHours(effectiveTz, date)
 
   for (let mins = startMins; mins + slotMinutes <= endMins; mins += slotMinutes) {
     const hour = Math.floor(mins / 60)
     const minute = mins % 60
-    // Convert Eastern wall time to UTC ISO
-    const slotStartIso = easternWallTimeToUtcIso(year, month, day, hour, minute, offsetHours)
+    const slotStartIso = wallTimeToUtcIso(year, month, day, hour, minute, offsetHours)
     const slotStart = new Date(slotStartIso)
     const slotEnd = addMinutes(slotStart, slotMinutes)
 
@@ -178,15 +198,17 @@ export function computeSlotsForDay(
 export function computeSlots(params: {
   startDate: Date
   weeks: number
-  workingHours: WorkingHours & { days?: number[] }
+  workingHours: WorkingHours & { days?: number[]; timeZone?: string }
   busyBlocks: BusyBlock[]
   minNoticeDays?: number
+  timeZone?: string
 }): CalendarSlot[] {
-  const { startDate, weeks, workingHours, busyBlocks, minNoticeDays = 1 } = params
+  const { startDate, weeks, workingHours, busyBlocks, minNoticeDays = 1, timeZone } = params as any
   const days = workingHours.days ?? [1, 2, 3, 4, 5]
   const slotMinutes = normalizeSlotMinutes((workingHours as any).slotMinutes ?? (workingHours as any).slotDurationMinutes ?? 30)
   const start = workingHours.start ?? '09:00'
   const end = workingHours.end ?? '17:00'
+  const effectiveTz = timeZone || (workingHours as any).timeZone || TIMEZONE
 
   const allDates: Date[] = []
   const totalDays = Math.max(1, weeks) * 7
@@ -220,7 +242,7 @@ export function computeSlots(params: {
 
   const allSlots: CalendarSlot[] = []
   for (const d of workingDates) {
-    const daySlots = computeSlotsForDay(d, { start, end, slotMinutes }, busyBlocks)
+    const daySlots = computeSlotsForDay(d, { start, end, slotMinutes, timeZone: effectiveTz }, busyBlocks, effectiveTz)
     allSlots.push(...daySlots)
   }
 
@@ -387,6 +409,62 @@ export interface CreateEventParams {
   slot: { date: string; start: string; end: string; available?: boolean }
   cancelToken: string
   siteUrl?: string
+  timeZone?: string
+  driveFolderUrl?: string
+}
+
+export function buildEventDescription(opts: {
+  purpose?: string
+  email: string
+  phone?: string
+  cancelUrl?: string
+  meetLink?: string
+  driveLink?: string
+}): string {
+  const lines: string[] = []
+  lines.push(opts.purpose || 'Intro call')
+  lines.push('')
+  if (opts.driveLink) {
+    lines.push(`Drive folder (upload your documents): ${opts.driveLink}`)
+    lines.push('')
+  }
+  if (opts.meetLink) lines.push(`Meet: ${opts.meetLink}`)
+  if (opts.cancelUrl) lines.push(`Cancel: ${opts.cancelUrl}`)
+  lines.push('')
+  lines.push(`Contact: ${opts.email} ${opts.phone || ''}`.trim())
+  return lines.join('\n')
+}
+
+export async function patchBookingEventDescription(
+  env: any,
+  calendarId: string,
+  eventId: string,
+  description: string,
+  opts?: { accessToken?: string }
+): Promise<boolean> {
+  if (!calendarId || !eventId || String(eventId).startsWith('stub-') || String(eventId).startsWith('missing-')) return false
+  try {
+    let token = opts?.accessToken
+    if (!token && hasOAuthConfig(env)) {
+      const { accessToken } = await getOAuthAccessToken(env)
+      token = accessToken
+    }
+    if (!token) {
+      const saKeyRaw = getGcalServiceKey(env)
+      if (!saKeyRaw) return false
+      // reuse getFreeBusy token logic quickly via createBookingEvent path? Fallback try via getOAuth or skip
+      // For SA path we need JWT — attempt via token exchange using same import as getFreeBusy simplified: try oauth already done
+      return false
+    }
+    const res = await fetch(`https://www.googleapis.com/calendar/v3/calendars/${encodeURIComponent(calendarId)}/events/${encodeURIComponent(eventId)}`, {
+      method: 'PATCH',
+      headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
+      body: JSON.stringify({ description }),
+    })
+    return res.ok
+  } catch {
+    return false
+  }
 }
 
 export interface CreateEventResult {
@@ -394,6 +472,116 @@ export interface CreateEventResult {
   meetLink: string
   source: 'live' | 'stub'
   error?: string
+}
+
+export async function deleteBookingEvent(env: any, eventId: string, calendarId: string, opts?: { shouldNotify?: boolean }): Promise<boolean> {
+  // V6 fix: notify checkbox was a lie — always used sendUpdates=all. Now respect opts.shouldNotify, default true for backward compat
+  const shouldNotify = opts?.shouldNotify !== false
+  const sendUpdates = shouldNotify ? 'all' : 'none'
+  // Nothing to delete for stubs — treat as success so admin DB cleanup can proceed
+  if (!eventId || String(eventId).startsWith('stub-') || String(eventId).startsWith('missing-')) {
+    console.log(`!!! DELETE_BOOKING_EVENT_SKIP_STUB eventId=${eventId}`)
+    return true
+  }
+  if (!calendarId) {
+    console.log(`!!! DELETE_BOOKING_EVENT_NO_CALENDAR_ID eventId=${eventId}`)
+    return false
+  }
+
+  // Option B (documented): OAuth refresh-token flow — try first
+  if (hasOAuthConfig(env)) {
+    try {
+      const { accessToken, error: tokenErr } = await getOAuthAccessToken(env)
+      if (!accessToken) {
+        console.log(`!!! DELETE_BOOKING_EVENT_OAUTH_NO_TOKEN error=${tokenErr}`)
+      } else {
+        const res = await fetch(`https://www.googleapis.com/calendar/v3/calendars/${encodeURIComponent(calendarId)}/events/${encodeURIComponent(eventId)}?sendUpdates=${sendUpdates}`, {
+          method: 'DELETE',
+          headers: { Authorization: `Bearer ${accessToken}` },
+        })
+        if (res.ok || res.status === 404 || res.status === 410) {
+          console.log(`!!! DELETE_BOOKING_EVENT_OAUTH_OK status=${res.status} calendarId=${calendarId.slice(0, 8)}...`)
+          return true
+        }
+        const txt = await res.text().catch(() => '')
+        console.log(`!!! DELETE_BOOKING_EVENT_OAUTH_FAIL status=${res.status} body=${txt.slice(0, 300)}`)
+        // fall through to SA attempt – OAuth token may be scoped to booking calendar only
+      }
+    } catch (e: any) {
+      console.log(`!!! DELETE_BOOKING_EVENT_OAUTH_EXCEPTION ${e?.message}`)
+    }
+  }
+
+  // Option A: Service Account JWT
+  const saKeyRaw = getGcalServiceKey(env) || (env as any)?.GCAL_SERVICE_ACCOUNT_KEY
+  if (!saKeyRaw) {
+    console.log(`!!! DELETE_BOOKING_EVENT_NO_CREDENTIALS eventId=${eventId} calendarId=${calendarId.slice(0, 8)}... hasOAuth=${hasOAuthConfig(env)}`)
+    return false
+  }
+
+  try {
+    let saKey: any
+    if (typeof saKeyRaw === 'string') saKey = JSON.parse(saKeyRaw)
+    else saKey = saKeyRaw
+
+    const now = Math.floor(Date.now() / 1000)
+    const header = { alg: 'RS256', typ: 'JWT' }
+    const payload = {
+      iss: saKey.client_email,
+      scope: 'https://www.googleapis.com/auth/calendar',
+      aud: saKey.token_uri || 'https://oauth2.googleapis.com/token',
+      iat: now,
+      exp: now + 3600,
+    }
+
+    const enc = (obj: any) => btoa(JSON.stringify(obj)).replace(/\+/g, '-').replace(/\//g, '_').replace(/=+$/, '')
+
+    const pem = saKey.private_key
+    const pemBody = pem.replace(/-----BEGIN PRIVATE KEY-----/, '').replace(/-----END PRIVATE KEY-----/, '').replace(/\s/g, '')
+    const binaryDer = Uint8Array.from(atob(pemBody), (c) => c.charCodeAt(0))
+    const cryptoKey = await crypto.subtle.importKey('pkcs8', binaryDer, { name: 'RSASSA-PKCS1-v1_5', hash: 'SHA-256' }, false, ['sign'])
+    const headerB64 = enc(header)
+    const payloadB64 = enc(payload)
+    const data = new TextEncoder().encode(`${headerB64}.${payloadB64}`)
+    const sigBuf = await crypto.subtle.sign('RSASSA-PKCS1-v1_5', cryptoKey, data)
+    const sigArray = new Uint8Array(sigBuf)
+    let binary = ''
+    sigArray.forEach((b) => (binary += String.fromCharCode(b)))
+    const sigB64 = btoa(binary).replace(/\+/g, '-').replace(/\//g, '_').replace(/=+$/, '')
+    const jwt = `${headerB64}.${payloadB64}.${sigB64}`
+
+    const tokenRes = await fetch(saKey.token_uri || 'https://oauth2.googleapis.com/token', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
+      // Fixed typo: was urn:ietf:params:grant-type:jwt-bearer (missing oauth:), Google returns 400 unsupported_grant_type
+      body: `grant_type=urn:ietf:params:oauth:grant-type:jwt-bearer&assertion=${jwt}`,
+    })
+
+    if (!tokenRes.ok) {
+      const txt = await tokenRes.text().catch(() => '')
+      console.log(`!!! DELETE_BOOKING_EVENT_SA_TOKEN_FAIL status=${tokenRes.status} body=${txt.slice(0, 300)}`)
+      return false
+    }
+    const tokenJson = await tokenRes.json() as any
+    const accessToken = tokenJson.access_token
+    if (!accessToken) return false
+
+    const res = await fetch(`https://www.googleapis.com/calendar/v3/calendars/${encodeURIComponent(calendarId)}/events/${encodeURIComponent(eventId)}?sendUpdates=${sendUpdates}`, {
+      method: 'DELETE',
+      headers: { Authorization: `Bearer ${accessToken}` },
+    })
+
+    if (res.ok || res.status === 404 || res.status === 410) {
+      console.log(`!!! DELETE_BOOKING_EVENT_SA_OK status=${res.status}`)
+      return true
+    }
+    const txt = await res.text().catch(() => '')
+    console.log(`!!! DELETE_BOOKING_EVENT_SA_FAIL status=${res.status} body=${txt.slice(0, 300)}`)
+    return false
+  } catch (e: any) {
+    console.error('deleteBookingEvent failed', e)
+    return false
+  }
 }
 
 export async function createBookingEvent(env: any, params: CreateEventParams): Promise<CreateEventResult> {
@@ -421,6 +609,8 @@ export async function createBookingEvent(env: any, params: CreateEventParams): P
       slot: params.slot,
       cancelToken: params.cancelToken,
       siteUrl,
+      timeZone: params.timeZone,
+      driveFolderUrl: params.driveFolderUrl,
     })
     console.log(`!!! GCAL_OAUTH_RESULT source=${oauthResult.source} eventId=${oauthResult.calendarEventId} meetLink=${oauthResult.meetLink} error=${oauthResult.error || 'none'}`)
     if (oauthResult.source === 'live-oauth' && oauthResult.calendarEventId && !oauthResult.calendarEventId.startsWith('stub-')) {
@@ -529,11 +719,19 @@ export async function createBookingEvent(env: any, params: CreateEventParams): P
     // NOTE: Service accounts cannot invite attendees without Domain-Wide Delegation — causes 403 forbiddenForServiceAccounts
     // Fix: try with attendees first, if that fails with forbiddenForServiceAccounts, retry without attendees
     console.log(`!!! GCAL_EVENT_CREATE_START summary=Meeting with ${params.firstName} start=${params.slot.start} end=${params.slot.end} bookingId=${bookingId.slice(0, 8)}...`)
+    const eventTimeZone = params.timeZone || env?.TIMEZONE || TIMEZONE
+    const cancelUrl = `${siteUrl}/api/cancel/${params.cancelToken}`
     const basePayload = {
       summary: `Meeting with ${params.firstName} ${params.lastName}`,
-      description: `${params.purpose || 'Intro call'}\n\nContact: ${params.email} ${params.phone || ''}\n\nCancel: ${siteUrl}/api/cancel/${params.cancelToken}`,
-      start: { dateTime: params.slot.start, timeZone: TIMEZONE },
-      end: { dateTime: params.slot.end, timeZone: TIMEZONE },
+      description: buildEventDescription({
+        purpose: params.purpose,
+        email: params.email,
+        phone: params.phone,
+        cancelUrl,
+        driveLink: params.driveFolderUrl,
+      }),
+      start: { dateTime: params.slot.start, timeZone: eventTimeZone },
+      end: { dateTime: params.slot.end, timeZone: eventTimeZone },
       reminders: {
         useDefault: false,
         overrides: [
@@ -674,8 +872,7 @@ export async function createBookingEvent(env: any, params: CreateEventParams): P
     }
     console.log(`!!! GCAL_EVENT_CREATED id=${created.id} meetLink=${meetLink || '(no Meet - bare event)'} source=live`)
 
-    // Patch description to include actual Meet link + cancel link so Google invite contains meeting link text too per user request
-    // Only patch if we have a real meetLink (not fake, not empty)
+    // Patch description to include actual Meet link + cancel link + Drive link per T3
     if (meetLink && !meetLink.includes('fake-')) {
       try {
         console.log('!!! GCAL_EVENT_PATCH_DESCRIPTION_START')
@@ -686,7 +883,14 @@ export async function createBookingEvent(env: any, params: CreateEventParams): P
             Authorization: `Bearer ${accessToken}`,
           },
           body: JSON.stringify({
-            description: `${params.purpose || 'Intro call'}\n\nMeet: ${meetLink}\nCancel: ${siteUrl}/api/cancel/${params.cancelToken}\n\nContact: ${params.email} ${params.phone || ''}`,
+            description: buildEventDescription({
+              purpose: params.purpose,
+              email: params.email,
+              phone: params.phone,
+              cancelUrl: `${siteUrl}/api/cancel/${params.cancelToken}`,
+              meetLink,
+              driveLink: params.driveFolderUrl,
+            }),
           }),
         })
         console.log('!!! GCAL_EVENT_PATCH_OK')

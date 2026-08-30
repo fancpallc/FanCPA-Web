@@ -16,11 +16,12 @@ export function Nav({ title = 'FAN CPA LLC' }: NavProps) {
   // top of the viewport — visitors landed mid-way through the booking-lookup form
   // instead. Booking is the contact route, so it is named as such and listed once.
   const navItems: { label: string; href: string; show: boolean }[] = [
-    { label: 'Services', href: '#services', show: visibleTypes.has('cards-grid') },
-    { label: 'About', href: '#about', show: visibleTypes.has('text-block') },
-    { label: 'Testimonials', href: '#testimonials', show: visibleTypes.has('testimonials') },
+    { label: 'Services', href: '/#services', show: visibleTypes.has('cards-grid') },
+    { label: 'About', href: '/#about', show: visibleTypes.has('text-block') },
+    { label: 'Testimonials', href: '/#testimonials', show: visibleTypes.has('testimonials') },
     // The gallery is often the largest section on the page and nothing used to link to it.
-    { label: 'Work', href: '#work', show: visibleTypes.has('image-gallery') },
+    { label: 'Work', href: '/#work', show: visibleTypes.has('image-gallery') },
+    { label: 'Client Portal', href: '/client-portal', show: true },
   ]
 
   const sectionLinks = navItems.filter((it) => it.show)
@@ -54,9 +55,12 @@ export function Nav({ title = 'FAN CPA LLC' }: NavProps) {
             href="/"
             className="hover:opacity-75 transition-opacity flex items-center gap-2"
             onClick={(e) => {
-              e.preventDefault()
-              window.scrollTo({ top: 0, behavior: 'smooth' })
-              window.history.pushState(null, '', '/')
+              // Only smooth-scroll on the home page — off home, let browser navigate normally
+              if (typeof window !== 'undefined' && window.location.pathname === '/') {
+                e.preventDefault()
+                window.scrollTo({ top: 0, behavior: 'smooth' })
+                window.history.pushState(null, '', '/')
+              }
             }}
           >
             {data?.page?.icon_url && <img src={data.page.icon_url} alt="" className="w-8 h-8 rounded" />}
@@ -72,7 +76,7 @@ export function Nav({ title = 'FAN CPA LLC' }: NavProps) {
               {item.label}
                     </a>
                   ))}
-          <a href="#calendar" className="inline-flex items-center min-h-11 px-4 rounded-full bg-slate-900 text-white whitespace-nowrap">
+          <a href="/#calendar" className="inline-flex items-center min-h-11 px-4 rounded-full bg-slate-900 text-white whitespace-nowrap">
             Book a free call
           </a>
           {collapseOnMobile && (

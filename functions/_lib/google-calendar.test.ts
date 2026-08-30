@@ -1,5 +1,8 @@
 import { describe, it, expect } from 'vitest'
-import { computeSlotsForDay, computeSlots, parseTime, filterWorkingDays, getStubBusyBlocks, getStubSlots, normalizeSlotMinutes, getNext14Days } from './google-calendar'
+import {
+  computeSlotsForDay, computeSlots, parseTime, filterWorkingDays, getStubBusyBlocks, getStubSlots,
+  normalizeSlotMinutes, getNext14Days, getTimezoneOffsetHours, wallTimeToUtcIso, TIMEZONE,
+} from './google-calendar'
 
 describe('google-calendar lib — slot math', () => {
   it('should parse working hours vars START/END 09:00/17:00', () => {
@@ -43,10 +46,12 @@ describe('google-calendar lib — slot math', () => {
   })
 
   it('should respect working days 1-5 filter (Mon-Fri) — weekend no slots', () => {
-    const monday = new Date('2026-07-20T00:00:00Z') // Monday
-    const saturday = new Date('2026-07-25T00:00:00Z') // Saturday
-    expect(filterWorkingDays([monday, saturday], [1,2,3,4,5]).length).toBe(1)
-    expect(filterWorkingDays([monday, saturday], [1,2,3,4,5])[0].getDay()).toBe(1)
+    // Use noon UTC so local getDay() matches UTC for all US timezones (day boundary at noon is safe)
+    const monday = new Date('2026-07-20T12:00:00Z') // Monday noon UTC
+    const saturday = new Date('2026-07-25T12:00:00Z') // Saturday noon UTC
+    const filtered = filterWorkingDays([monday, saturday], [1, 2, 3, 4, 5])
+    expect(filtered.length).toBe(1)
+    expect(filtered[0].getDay()).toBe(1)
   })
 
   it('should handle busy all day → 0 available (Eastern 09-17 ET =13-21 UTC)', () => {
@@ -125,20 +130,27 @@ describe('google-calendar lib — slot math', () => {
   it('should generate 14 days from today (not full month) for calendar display', () => {
     const days = getNext14Days(0)
     expect(days.length).toBe(14)
-    // First day should be today (midnight)
-    const todayStr = new Date().toISOString().split('T')[0]
-    expect(days[0].toISOString().split('T')[0]).toBe(todayStr)
+    // getNext14Days uses local midnight; compare using local date parts to stay tz-independent
+    const todayLocal = new Date()
+    todayLocal.setHours(0, 0, 0, 0)
+    const firstLocal = new Date(days[0])
+    firstLocal.setHours(0, 0, 0, 0)
+    expect(firstLocal.getTime()).toBe(todayLocal.getTime())
   })
 
   it('should exclude today when minNoticeDays is 1', () => {
     const days = getNext14Days(1)
     expect(days.length).toBe(14)
-    const todayStr = new Date().toISOString().split('T')[0]
-    expect(days[0].toISOString().split('T')[0]).not.toBe(todayStr)
-    // Should start from tomorrow
+    const todayLocal = new Date()
+    todayLocal.setHours(0, 0, 0, 0)
+    const firstLocal = new Date(days[0])
+    firstLocal.setHours(0, 0, 0, 0)
+    expect(firstLocal.getTime()).not.toBe(todayLocal.getTime())
+    // Should start from tomorrow (local)
     const tomorrow = new Date()
+    tomorrow.setHours(0, 0, 0, 0)
     tomorrow.setDate(tomorrow.getDate() + 1)
-    expect(days[0].toISOString().split('T')[0]).toBe(tomorrow.toISOString().split('T')[0])
+    expect(firstLocal.getTime()).toBe(tomorrow.getTime())
   })
 
   it('should compute slots excluding today when minNoticeDays is 1', () => {
@@ -158,6 +170,84 @@ describe('google-calendar lib — slot math', () => {
     expect(slotsWithToday.length).toBe(7)
     expect(slotsWithoutToday.length).toBe(6)
     expect(slotsWithoutToday.length).toBeLessThan(slotsWithToday.length)
+  })
+})
+
+describe('google-calendar — getTimezoneOffsetHours (T4 general-purpose, drives every slot)', () => {
+  // DST boundaries: Eastern EST UTC-5 vs EDT UTC-4, Pacific PST UTC-8 vs PDT UTC-7, UTC always 0
+  it('Eastern: January (EST) offset 5, July (EDT) offset 4', () => {
+    expect(getTimezoneOffsetHours('America/New_York', new Date('2026-01-15T12:00:00Z'))).toBe(5)
+    expect(getTimezoneOffsetHours('America/New_York', new Date('2026-07-15T12:00:00Z'))).toBe(4)
+  })
+  it('Pacific: January (PST) offset 8, July (PDT) offset 7 — non-Eastern zone DST', () => {
+    expect(getTimezoneOffsetHours('America/Los_Angeles', new Date('2026-01-15T12:00:00Z'))).toBe(8)
+    expect(getTimezoneOffsetHours('America/Los_Angeles', new Date('2026-07-15T12:00:00Z'))).toBe(7)
+  })
+  it('Central and Mountain also cross DST', () => {
+    expect(getTimezoneOffsetHours('America/Chicago', new Date('2026-01-15T12:00:00Z'))).toBe(6)
+    expect(getTimezoneOffsetHours('America/Chicago', new Date('2026-07-15T12:00:00Z'))).toBe(5)
+    expect(getTimezoneOffsetHours('America/Denver', new Date('2026-01-15T12:00:00Z'))).toBe(7)
+    expect(getTimezoneOffsetHours('America/Denver', new Date('2026-07-15T12:00:00Z'))).toBe(6)
+  })
+  it('UTC always 0', () => {
+    expect(getTimezoneOffsetHours('UTC', new Date('2026-01-15T12:00:00Z'))).toBe(0)
+    expect(getTimezoneOffsetHours('UTC', new Date('2026-07-15T12:00:00Z'))).toBe(0)
+  })
+  it('wallTimeToUtcIso respects offset — 09:00 NY EST (offset 5) => 14:00 UTC, EDT (offset 4) => 13:00 UTC', () => {
+    const janOff = getTimezoneOffsetHours('America/New_York', new Date('2026-01-15T12:00:00Z')) // 5
+    const julOff = getTimezoneOffsetHours('America/New_York', new Date('2026-07-15T12:00:00Z')) // 4
+    expect(wallTimeToUtcIso(2026, 0, 15, 9, 0, janOff)).toBe('2026-01-15T14:00:00.000Z')
+    expect(wallTimeToUtcIso(2026, 6, 15, 9, 0, julOff)).toBe('2026-07-15T13:00:00.000Z')
+  })
+  it('Alaska and Hawaii offsets', () => {
+    // Alaska: AKST UTC-9, AKDT UTC-8
+    expect(getTimezoneOffsetHours('America/Anchorage', new Date('2026-01-15T12:00:00Z'))).toBe(9)
+    expect(getTimezoneOffsetHours('America/Anchorage', new Date('2026-07-15T12:00:00Z'))).toBe(8)
+    // Hawaii: HST UTC-10 no DST
+    expect(getTimezoneOffsetHours('Pacific/Honolulu', new Date('2026-01-15T12:00:00Z'))).toBe(10)
+    expect(getTimezoneOffsetHours('Pacific/Honolulu', new Date('2026-07-15T12:00:00Z'))).toBe(10)
+  })
+})
+
+describe('google-calendar — computeSlotsForDay with configurable site timezone (T4)', () => {
+  it('Pacific 09:00 PDT in July => 16:00 UTC (offset 7), Eastern same day => 13:00 UTC', () => {
+    const date = new Date('2026-07-20T00:00:00Z')
+    const ny = computeSlotsForDay(date, { start: '09:00', end: '10:00', slotMinutes: 60, timeZone: 'America/New_York' } as any, [], 'America/New_York')
+    const la = computeSlotsForDay(date, { start: '09:00', end: '10:00', slotMinutes: 60, timeZone: 'America/Los_Angeles' } as any, [], 'America/Los_Angeles')
+    expect(ny[0].start).toContain('13:00')
+    expect(la[0].start).toContain('16:00')
+  })
+  it('January Eastern 09:00 EST => 14:00 UTC vs July EDT => 13:00 UTC (DST shift)', () => {
+    const jan = new Date('2026-01-20T00:00:00Z')
+    const jul = new Date('2026-07-20T00:00:00Z')
+    const janSlots = computeSlotsForDay(jan, { start: '09:00', end: '10:00', slotMinutes: 60, timeZone: 'America/New_York' } as any, [], 'America/New_York')
+    const julSlots = computeSlotsForDay(jul, { start: '09:00', end: '10:00', slotMinutes: 60, timeZone: 'America/New_York' } as any, [], 'America/New_York')
+    expect(janSlots[0].start).toContain('14:00')
+    expect(julSlots[0].start).toContain('13:00')
+  })
+  it('UTC zone 09:00 => 09:00 UTC same day', () => {
+    const date = new Date('2026-07-20T00:00:00Z')
+    const slots = computeSlotsForDay(date, { start: '09:00', end: '10:00', slotMinutes: 60, timeZone: 'UTC' } as any, [], 'UTC')
+    expect(slots[0].start).toBe('2026-07-20T09:00:00.000Z')
+  })
+  it('computeSlots propagates timezone via timeZone param (T4 precedence)', () => {
+    const start = new Date('2026-07-20T00:00:00Z')
+    const slots = computeSlots({
+      startDate: start, weeks: 1,
+      workingHours: { start: '09:00', end: '10:00', days: [1,2,3,4,5], slotMinutes: 60, timeZone: 'America/Los_Angeles' } as any,
+      busyBlocks: [], minNoticeDays: -999, timeZone: 'America/Los_Angeles',
+    } as any)
+    // First slot should be LA 09:00 => 16:00 UTC
+    expect(slots[0].start).toContain('16:00')
+  })
+  it('T5 empty-calendar guard: 09:30+09:45 collapsed window returns [] and logs', () => {
+    // Simulates what happens if env had 09:30 and 09:45 — both snap to 09:00 in slots.ts, but lib itself sees 09:00-09:00 => []
+    const date = new Date('2026-07-20T00:00:00Z')
+    const slots = computeSlotsForDay(date, { start: '09:00', end: '09:00', slotMinutes: 60 } as any, [])
+    expect(slots.length).toBe(0)
+    // A 15-min raw window also produces no slots because slotMinutes=60 > window
+    const tiny = computeSlotsForDay(date, { start: '09:30', end: '09:45', slotMinutes: 60 } as any, [])
+    expect(tiny.length).toBe(0)
   })
 })
 

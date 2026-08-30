@@ -1,4 +1,14 @@
 # Copy to .dev.vars for local wrangler pages dev
 # This file is gitignored
 
+# OAuth – new fancpa-all client with calendar + drive.file scopes (Option B)
+GOOGLE_OAUTH_CLIENT_ID=xxx.apps.googleusercontent.com
+GOOGLE_OAUTH_CLIENT_SECRET=GOCSPX-...
+GOOGLE_OAUTH_REFRESH_TOKEN=1//0g...
+GOOGLE_DRIVE_ROOT_FOLDER_ID=1A2b...  # optional organizing folder, get ID from https://drive.google.com/drive/folders/<ID>
+RESEND_API_KEY=re_...
+TURNSTILE_SECRET_KEY=0x4AAAA...
+BOOKING_CALENDAR_ID=xxx@group.calendar.google.com
 ENVIRONMENT=local
+SITE_URL=http://localhost:8788
+

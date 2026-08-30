@@ -28,6 +28,11 @@ export interface Page {
   booking_max_per_week?: number | null
   booking_min_notice_days?: number | null
   google_tag_manager_id?: string | null
+  // T4 + T5: site timezone and working hours
+  site_time_zone?: string | null
+  site_working_hours_start?: string | null
+  site_working_hours_end?: string | null
+  site_working_days?: string | null
   sort_order: number
   is_published: number
 }
@@ -85,7 +90,7 @@ export interface FetchOptions {
 }
 
 export async function fetchJson(url: string, options: FetchOptions & { method?: string; body?: string } = {}) {
-  const { timeoutMs = 5000, signal, method = 'GET', cache, body } = options as any
+  const { timeoutMs = 8000, signal, method = 'GET', cache, body } = options as any
   const controller = new AbortController()
   const timeout = setTimeout(() => controller.abort(new Error(`timeout after ${timeoutMs}ms`)), timeoutMs)
   if (signal) {
@@ -200,9 +205,230 @@ export interface AdminAuthResponse {
   diagnostics?: any
 }
 
+export interface AdminClientRow {
+  contact_id: string
+  first_name: string
+  last_name: string
+  email: string
+  phone?: string
+  booking_id?: string
+  meet_link?: string
+  purpose?: string
+  slot_start?: string
+  slot_end?: string
+  time_zone?: string
+  status?: string
+  cancel_token?: string
+  year?: number
+  year_folder_url?: string
+  drive_folder_url?: string
+  drive_folder_id?: string
+  // S8 soft-delete audit
+  deleted_at?: string | null
+  cancelled_at?: string | null
+  cancelled_by?: string | null
+  deleted_reason?: string | null
+}
+
+export interface AdminClientCard {
+  contact_id: string
+  first_name: string
+  last_name: string
+  email: string
+  phone?: string
+  drive_folder_url?: string | null
+  drive_folder_id?: string | null
+  drive_is_manual?: number
+  year_folders: { year: number; folder_url: string; folder_id?: string; parent_folder_id?: string; is_manual?: number }[]
+  meetings: AdminClientRow[]
+}
+
 export async function fetchAdminAuth(options: FetchOptions = {}): Promise<AdminAuthResponse> {
   const { json } = await fetchJson('/api/admin/auth', { ...options, cache: 'no-store' } as any)
   return json as AdminAuthResponse
+}
+
+export interface SearchAdminClientsResult {
+  results: AdminClientRow[] // legacy compat
+  clients: AdminClientCard[]
+}
+
+export async function searchAdminClients(
+  q: string,
+  opts?: { startDate?: string; endDate?: string },
+  options: FetchOptions = {}
+): Promise<AdminClientRow[]> {
+  const params = new URLSearchParams({ q })
+  if (opts?.startDate) params.set('start_date', opts.startDate)
+  if (opts?.endDate) params.set('end_date', opts.endDate)
+  const { json } = await fetchJson(`/api/admin/clients/search?${params.toString()}`, { ...options })
+  // Prefer grouped clients when present, but return legacy for old callers
+  return (json as any).results as AdminClientRow[]
+}
+
+export async function searchAdminClientsGrouped(
+  q: string,
+  opts?: { startDate?: string; endDate?: string; showHidden?: boolean },
+  options: FetchOptions = {}
+): Promise<AdminClientCard[]> {
+  const params = new URLSearchParams({ q })
+  if (opts?.startDate) params.set('start_date', opts.startDate)
+  if (opts?.endDate) params.set('end_date', opts.endDate)
+  if (opts?.showHidden) params.set('showHidden', 'true')
+  const { json } = await fetchJson(`/api/admin/clients/search?${params.toString()}`, { ...options })
+  const data = json as any
+  if (Array.isArray(data.clients) && data.clients.length > 0) return data.clients as AdminClientCard[]
+  // Fallback: group legacy results client-side
+  const results: AdminClientRow[] = data.results || []
+  const map = new Map<string, AdminClientCard>()
+  for (const r of results) {
+    if (!map.has(r.contact_id)) {
+      map.set(r.contact_id, {
+        contact_id: r.contact_id,
+        first_name: r.first_name,
+        last_name: r.last_name,
+        email: r.email,
+        drive_folder_url: (r as any).drive_folder_url || r.year_folder_url || null,
+        drive_folder_id: (r as any).drive_folder_id || null,
+        drive_is_manual: 0,
+        year_folders: [],
+        meetings: [],
+      })
+    }
+    if (r.booking_id) {
+      map.get(r.contact_id)!.meetings.push(r)
+    }
+  }
+  return Array.from(map.values())
+}
+
+export async function updateAdminDriveFolder(contact_id: string, yearOrUrl: string, folder_url?: string, options: FetchOptions = {}): Promise<void> {
+  // L1 fix: remove brittle startsWith('http') overload — year is always 4 digits, URL never is.
+  // - updateAdminDriveFolder(contact_id, year, url) → year-level
+  // - updateAdminDriveFolder(contact_id, url) → client-level (deprecated, use updateAdminDriveFolderClientLevel)
+  // Production uses updateAdminDriveFolderClientLevel; this remains only for legacy tests.
+  if (folder_url) {
+    await fetchJson('/api/admin/clients/drive-folder', {
+      timeoutMs: (options as any).timeoutMs ?? 10000,
+      ...(options as any),
+      method: 'PATCH',
+      body: JSON.stringify({ contact_id, year: yearOrUrl, folder_url }),
+    })
+  } else {
+    await fetchJson('/api/admin/clients/drive-folder', {
+      timeoutMs: (options as any).timeoutMs ?? 10000,
+      ...(options as any),
+      method: 'PATCH',
+      body: JSON.stringify({ contact_id, folder_url: yearOrUrl }),
+    })
+  }
+}
+
+export async function updateAdminDriveFolderClientLevel(contact_id: string, folder_url: string, options: FetchOptions = {}): Promise<void> {
+  await fetchJson('/api/admin/clients/drive-folder', {
+    timeoutMs: (options as any).timeoutMs ?? 10000,
+    ...(options as any),
+    method: 'PATCH',
+    body: JSON.stringify({ contact_id, folder_url }),
+  })
+}
+
+export async function updateAdminClient(contact_id: string, fields: { first_name?: string; last_name?: string; phone?: string }, options: FetchOptions = {}): Promise<any> {
+  const { json } = await fetchJson(`/api/admin/clients/${encodeURIComponent(contact_id)}`, {
+    timeoutMs: (options as any).timeoutMs ?? 10000,
+    ...(options as any),
+    method: 'PATCH',
+    body: JSON.stringify(fields),
+  })
+  return json
+}
+
+export interface SendAdminEmailResult {
+  success: boolean
+  sentTo: string
+  meetingsCount: number
+  driveLink: string
+  emailResult?: any
+}
+
+export async function sendAdminClientEmail(contact_id: string, bookingIds?: string[], options: FetchOptions = {}): Promise<SendAdminEmailResult> {
+  const { json } = await fetchJson('/api/admin/clients/send-email', {
+    timeoutMs: (options as any).timeoutMs ?? 15000,
+    ...(options as any),
+    method: 'POST',
+    body: JSON.stringify({ contact_id, ...(bookingIds && bookingIds.length ? { booking_ids: bookingIds } : {}) }),
+  })
+  return json as any
+}
+
+export async function createManualBooking(body: any, options: FetchOptions = {}): Promise<any> {
+  const { json } = await fetchJson('/api/admin/bookings/manual', {
+    timeoutMs: (options as any).timeoutMs ?? 20000,
+    ...options,
+    method: 'POST',
+    body: JSON.stringify(body),
+  })
+  return json
+}
+
+export async function deleteBooking(
+  bookingId: string,
+  cancelMeeting: boolean,
+  opts?: { notifyClient?: boolean; action?: 'hide' | 'cancel' } | boolean,
+  options: FetchOptions = {}
+): Promise<any> {
+  // Back-compat: third arg can be notifyClient boolean or options object
+  let notifyClient: boolean | undefined
+  let action: 'hide' | 'cancel' | undefined
+  let fetchOpts: FetchOptions = options
+  if (typeof opts === 'object' && opts !== null && !Array.isArray(opts)) {
+    if ('notifyClient' in (opts as any) || 'action' in (opts as any)) {
+      notifyClient = (opts as any).notifyClient
+      action = (opts as any).action
+      fetchOpts = options
+    } else {
+      fetchOpts = opts as FetchOptions
+    }
+  } else if (typeof opts === 'boolean') {
+    notifyClient = opts
+  }
+  let url = `/api/admin/bookings/${encodeURIComponent(bookingId)}?cancelMeeting=${cancelMeeting}`
+  if (action) url += `&action=${action}`
+  if (notifyClient !== undefined) url += `&notifyClient=${notifyClient}`
+  const { json } = await fetchJson(url, { timeoutMs: (fetchOpts as any).timeoutMs ?? 15000, ...(fetchOpts as any), method: 'DELETE' })
+  return json
+}
+
+export async function cancelAdminBooking(bookingId: string, notifyClient: boolean = false, options: FetchOptions = {}): Promise<any> {
+  const url = `/api/admin/bookings/${encodeURIComponent(bookingId)}?action=cancel&cancelMeeting=true&notifyClient=${notifyClient}`
+  const { json } = await fetchJson(url, { timeoutMs: (options as any).timeoutMs ?? 15000, ...(options as any), method: 'DELETE' })
+  return json
+}
+
+export async function hideAdminBooking(bookingId: string, options: FetchOptions = {}): Promise<any> {
+  const url = `/api/admin/bookings/${encodeURIComponent(bookingId)}?action=hide`
+  const { json } = await fetchJson(url, { timeoutMs: (options as any).timeoutMs ?? 15000, ...(options as any), method: 'DELETE' })
+  return json
+}
+
+export async function unhideAdminBooking(bookingId: string, options: FetchOptions = {}): Promise<any> {
+  const { json } = await fetchJson(`/api/admin/bookings/${encodeURIComponent(bookingId)}`, {
+    timeoutMs: (options as any).timeoutMs ?? 10000,
+    ...(options as any),
+    method: 'PATCH',
+    body: JSON.stringify({ action: 'unhide' }),
+  })
+  return json
+}
+
+export async function rebookAdminBooking(bookingId: string, overrides?: any, options: FetchOptions = {}): Promise<any> {
+  const { json } = await fetchJson(`/api/admin/bookings/${encodeURIComponent(bookingId)}`, {
+    timeoutMs: (options as any).timeoutMs ?? 20000,
+    ...(options as any),
+    method: 'PATCH',
+    body: JSON.stringify({ action: 'rebook', ...(overrides || {}) }),
+  })
+  return json
 }
 
 export interface R2UsageResponse {
@@ -221,6 +447,7 @@ export interface R2UsageResponse {
   guidance?: string
   objects?: { key: string; size: number; sizeKB?: number }[]
   error?: string
+  driveQuota?: { usage: number; limit?: number; usageInDrive?: number; usageInDriveTrash?: number; source: 'live' | 'stub'; error?: string } | null
 }
 
 export async function fetchR2Usage(checkQuota: boolean = false, options: FetchOptions = {}): Promise<R2UsageResponse> {
@@ -268,5 +495,19 @@ export async function createBooking(payload: BookingPayload, options: FetchOptio
   } finally {
     clearTimeout(timeout)
   }
+}
+
+export async function lookupClientPortal(payload: { email: string; turnstileToken: string }, options: FetchOptions = {}): Promise<{ success: boolean; message: string }> {
+  const res = await fetch('/api/client-portal/lookup', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify(payload),
+    ...options,
+  })
+  const json = await res.json()
+  if (!res.ok) {
+    throw new ApiError(`Request failed with ${res.status}`, res.status, json)
+  }
+  return json as { success: boolean; message: string }
 }
 
