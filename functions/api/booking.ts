@@ -70,6 +70,11 @@ export const onRequestPost: PagesFunction<Env> = async ({ request, env }) => {
 
     console.log(`!!! BOOKING_VALIDATION_START email=${email} slot=${slot?.start} confirmIntent=${body.confirmIntent}`)
 
+    // R14: cap purpose length to avoid megabyte into calendar description/email
+    if (purpose && purpose.length > 2000) {
+      return new Response(JSON.stringify({ error: 'Purpose too long (max 2000 chars)' }), { status: 400, headers })
+    }
+
     // Validation per tests: required fields first_name, last_name, email, slot
     if (!firstName || !lastName || !email || !slot?.start || !slot?.end) {
       console.log('!!! BOOKING_VALIDATION_FAILED missing required fields')
@@ -120,10 +125,11 @@ export const onRequestPost: PagesFunction<Env> = async ({ request, env }) => {
       try {
         const weekStart = getWeekStart(new Date()).toISOString()
         
-        // Get dynamic limit from DB page home config
+        // Get dynamic limit from DB — 0 means no limit (disabled)
         const page = await db.prepare('SELECT booking_max_per_week FROM pages WHERE slug = "home"').first() as any
-        const dbMax = page?.booking_max_per_week ?? 3
-        const maxPerWeek = dbMax > 0 ? dbMax : getMaxBookingsPerWeek(env)
+        const dbMaxRaw = page?.booking_max_per_week
+        const dbMax = typeof dbMaxRaw === 'number' ? dbMaxRaw : 3
+        const maxPerWeek = dbMaxRaw !== null && dbMaxRaw !== undefined ? dbMax : getMaxBookingsPerWeek(env)
         console.log(`!!! BOOKING_RATE_LIMIT weekStart=${weekStart} max=${maxPerWeek}`)
         
         const countStmt = db.prepare('SELECT COUNT(*) as count FROM bookings WHERE contact_id IN (SELECT id FROM contacts WHERE email = ?1) AND created_at >= ?2')
@@ -206,9 +212,20 @@ export const onRequestPost: PagesFunction<Env> = async ({ request, env }) => {
       if (existing?.id) {
         contactId = existing.id
         console.log(`!!! CONTACT_EXISTS id=${contactId} updating`)
-        // Update first/last/phone
-        const updateStmt = db.prepare('UPDATE contacts SET first_name = ?1, last_name = ?2, phone = ?3, updated_at = datetime("now") WHERE id = ?4')
-        await updateStmt.bind(firstName, lastName, phone || null, contactId).run().catch(() => {})
+        // V7 fix: previously UPDATE with updated_at always threw (column missing) and .catch swallowed silently
+        // 0016 now adds updated_at; try with column, fallback without for old DBs, and log loudly
+        try {
+          const updateStmt = db.prepare('UPDATE contacts SET first_name = ?1, last_name = ?2, phone = ?3, updated_at = datetime("now") WHERE id = ?4')
+          await updateStmt.bind(firstName, lastName, phone || null, contactId).run()
+        } catch (e: any) {
+          console.log(`!!! CONTACT_UPDATE_WITH_UPDATED_AT_FAILED ${e?.message} — retry without timestamp`)
+          try {
+            const fallback = db.prepare('UPDATE contacts SET first_name = ?1, last_name = ?2, phone = ?3 WHERE id = ?4')
+            await fallback.bind(firstName, lastName, phone || null, contactId).run()
+          } catch (e2: any) {
+            console.log(`!!! CONTACT_UPDATE_FALLBACK_FAILED ${e2?.message}`)
+          }
+        }
       } else {
         // Insert new contact
         const newId = crypto.randomUUID().replace(/-/g, '').slice(0, 16)
@@ -285,15 +302,23 @@ export const onRequestPost: PagesFunction<Env> = async ({ request, env }) => {
     })
     console.log(`!!! PENDING_EMAIL_RESULT success=${emailResult.success} source=${emailResult.source} id=${emailResult.id || 'none'} error=${emailResult.error || 'none'}`)
 
+    const isLocalOrTest = env?.ENVIRONMENT === 'local' || env?.ENVIRONMENT === 'test'
     return new Response(
       JSON.stringify({
         status: 'pending_confirmation',
+        pending: true,
         message: 'Confirmation email sent. Please click the link to finalize your booking.',
+        email: email,
+        dateTime: dateTimeEt,
+        purpose: purpose || null,
+        ...(isLocalOrTest ? { confirmUrl, confirmToken } : {}),
+        expiresAt,
         emailResult: {
           success: emailResult.success,
           source: emailResult.source,
           error: emailResult.error,
           id: emailResult.id,
+          email: email,
         },
       }),
       {

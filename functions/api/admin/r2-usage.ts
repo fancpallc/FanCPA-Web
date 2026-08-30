@@ -1,5 +1,6 @@
 import { isAdminAuthenticated, requireAdminAuth, isAdminBypass, getAdminAllowlist } from '../../_lib/auth'
 import { getEnvironment } from '../../_lib/env'
+import { getDriveStorageQuota } from '../../_lib/google-drive'
 
 export interface Env {
   DB?: any
@@ -86,6 +87,7 @@ export const onRequestGet: PagesFunction<Env> = async ({ request, env }) => {
           'Client resize PNG lossless max 1200px ≤1MB (0 Worker CPU) → server validates size/type 1MB → R2 put key portfolio/<uuid>.png → if oldKey provided delete old before PUT (replace-on-update) to stay under 10GB. Quota check only on demand via ?checkQuota=true to avoid LIST CPU on every request.',
         guidance: 'Pass ?checkQuota=true to run R2_BUCKET.list() and get real usage. Cheap path used for free tier CPU saving.',
         objects: [],
+        driveQuota: null,
       }),
       { status: 200, headers: commonHeaders }
     )
@@ -94,7 +96,11 @@ export const onRequestGet: PagesFunction<Env> = async ({ request, env }) => {
   // Expensive path — on demand quota check via R2 LIST (per your request)
   const r2 = env?.R2_BUCKET
   if (!r2 || typeof r2.list !== 'function') {
-    console.log('!!! R2_USAGE_R2_MISSING no binding')
+    console.log('!!! R2_USAGE_R2_MISSING no binding — still trying Drive quota')
+    let driveQuota: any = null
+    try {
+      driveQuota = await getDriveStorageQuota(env)
+    } catch {}
     return new Response(
       JSON.stringify({
         checkQuota: true,
@@ -112,6 +118,7 @@ export const onRequestGet: PagesFunction<Env> = async ({ request, env }) => {
         truncated: false,
         limits,
         guidance: 'Ensure R2 binding portfolio-images(-alpha) configured in wrangler.toml + Dashboard',
+        driveQuota,
       }),
       { status: 200, headers: commonHeaders } // 200 not 500 — diagnostics
     )
@@ -130,6 +137,16 @@ export const onRequestGet: PagesFunction<Env> = async ({ request, env }) => {
     const warning = percent > WARNING_PERCENT || totalObjectsExceeds(objects.length) || totalBytes > WARNING_PERCENT * 0.01 * R2_FREE_LIMIT_BYTES
 
     console.log(`!!! R2_USAGE_LIST_DONE count=${objects.length} bytes=${totalBytes} ms=${ms} truncated=${truncated} warning=${warning}`)
+
+    // R7: Drive quota — same on-demand path, Google round trip
+    let driveQuota: any = null
+    try {
+      driveQuota = await getDriveStorageQuota(env)
+      console.log(`!!! R2_USAGE_DRIVE_QUOTA source=${driveQuota.source} usage=${driveQuota.usage} limit=${driveQuota.limit} error=${driveQuota.error || 'none'}`)
+    } catch (e: any) {
+      console.log(`!!! R2_USAGE_DRIVE_QUOTA_ERROR ${e?.message}`)
+      driveQuota = { usage: 0, source: 'stub', error: e?.message }
+    }
 
     return new Response(
       JSON.stringify({
@@ -155,6 +172,7 @@ export const onRequestGet: PagesFunction<Env> = async ({ request, env }) => {
           ? `Storage ${percent.toFixed(1)}% of 10GB free tier — ${totalMB.toFixed(1)}MB used, ${objects.length} objects. Delete unused images or use replace flow (oldKey) to prevent bloat. Portfolio estimate <50 images ~15MB, so safe unless many orphaned.`
           : `Free tier safe: ${totalMB.toFixed(2)}MB / ${R2_FREE_LIMIT_MB}MB (${percent.toFixed(3)}% of 10GB) — ${objects.length} objects. Capacity ~10k images at 1MB each. No action needed.`,
         objects: objects.slice(0, 100).map((o: any) => ({ key: o.key, size: o.size, sizeKB: Math.round((o.size / 1024) * 10) / 10 })),
+        driveQuota,
       }),
       { status: 200, headers: commonHeaders }
     )

@@ -23,7 +23,11 @@ describe('CalendarView', () => {
   it('should place every day under its own weekday column', () => {
     // The grid used to be built with local-time arithmetic and rendered in Eastern
     // time, so "SAT 1 Aug" landed under the "SUN" header for anyone west of Eastern.
-    render(<CalendarView grouped={{} as any} selectedDate={null} onDateSelect={vi.fn()} excludeToday={false} slotMinutes={30} timeZone="America/New_York" setTimeZone={vi.fn()} />)
+    // Provide one available slot so the new zero-availability paused branch does not trigger.
+    const grouped = {
+      '2026-07-20': [{ date: '2026-07-20', start: '2026-07-20T13:00:00Z', end: '2026-07-20T14:00:00Z', available: true }],
+    } as any
+    render(<CalendarView grouped={grouped} selectedDate={null} onDateSelect={vi.fn()} excludeToday={false} slotMinutes={30} timeZone="America/New_York" setTimeZone={vi.fn()} />)
     const headers = [...document.querySelectorAll('.grid.grid-cols-7')[0].children].map((el) => el.textContent!.trim().toUpperCase())
     const cells = [...document.querySelectorAll('button[aria-label]')]
     expect(cells.length).toBeGreaterThanOrEqual(14)
@@ -52,6 +56,11 @@ describe('CalendarView', () => {
   it('shows no opening badge at all when nothing is bookable', () => {
     render(<CalendarView grouped={{} as any} selectedDate={null} onDateSelect={vi.fn()} excludeToday={true} slotMinutes={30} timeZone="America/New_York" setTimeZone={vi.fn()} />)
     expect(screen.queryByText(/First opening/i)).not.toBeInTheDocument()
+  })
+
+  it('shows paused message when no slots are available', () => {
+    render(<CalendarView grouped={{} as any} selectedDate={null} onDateSelect={vi.fn()} excludeToday={true} slotMinutes={60} timeZone="America/New_York" setTimeZone={vi.fn()} />)
+    expect(screen.getByText(/not taking new bookings/i)).toBeInTheDocument()
   })
 
   it('should highlight dates with available slots and selected state', () => {

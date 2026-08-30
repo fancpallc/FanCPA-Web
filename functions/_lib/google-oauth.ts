@@ -25,6 +25,55 @@ export interface OAuthCreateParams {
   slot: { date: string; start: string; end: string }
   cancelToken: string
   siteUrl: string
+  timeZone?: string
+  driveFolderUrl?: string
+}
+
+export function buildOAuthDescription(opts: {
+  purpose?: string
+  email: string
+  phone?: string
+  cancelUrl: string
+  meetLink?: string
+  driveLink?: string
+}): string {
+  const lines: string[] = []
+  lines.push(opts.purpose || 'Intro call')
+  lines.push('')
+  if (opts.driveLink) {
+    lines.push(`Drive folder (upload your documents): ${opts.driveLink}`)
+    lines.push('')
+  }
+  if (opts.meetLink) lines.push(`Meet: ${opts.meetLink}`)
+  lines.push(`Cancel: ${opts.cancelUrl}`)
+  lines.push('')
+  lines.push(`Contact: ${opts.email} ${opts.phone || ''}`.trim())
+  return lines.join('\n')
+}
+
+export async function patchOAuthEventDriveLink(
+  env: any,
+  calendarId: string,
+  eventId: string,
+  driveLink: string,
+  existing?: { purpose?: string; email: string; phone?: string; cancelUrl: string; meetLink?: string }
+): Promise<boolean> {
+  if (!calendarId || !eventId || !driveLink || String(eventId).startsWith('stub-')) return false
+  try {
+    const { accessToken } = await getOAuthAccessToken(env)
+    if (!accessToken) return false
+    const desc = existing
+      ? buildOAuthDescription({ purpose: existing.purpose, email: existing.email, phone: existing.phone, cancelUrl: existing.cancelUrl, meetLink: existing.meetLink, driveLink })
+      : `Drive folder (upload your documents): ${driveLink}`
+    const res = await fetch(`https://www.googleapis.com/calendar/v3/calendars/${encodeURIComponent(calendarId)}/events/${encodeURIComponent(eventId)}`, {
+      method: 'PATCH',
+      headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${accessToken}` },
+      body: JSON.stringify({ description: desc }),
+    })
+    return res.ok
+  } catch {
+    return false
+  }
 }
 
 export interface OAuthCreateResult {
@@ -34,7 +83,7 @@ export interface OAuthCreateResult {
   error?: string
 }
 
-async function getOAuthAccessToken(env: any): Promise<{ accessToken: string; error?: string }> {
+export async function getOAuthAccessToken(env: any): Promise<{ accessToken: string; error?: string }> {
   const clientId = getOAuthClientId(env)
   const clientSecret = getOAuthClientSecret(env)
   const refreshToken = getOAuthRefreshToken(env)
@@ -45,7 +94,6 @@ async function getOAuthAccessToken(env: any): Promise<{ accessToken: string; err
     console.log('!!! OAUTH_TOKEN_MISSING missing OAuth config')
     return { accessToken: '', error: 'OAuth config missing — need CLIENT_ID, CLIENT_SECRET, REFRESH_TOKEN' }
   }
-
   try {
     const params = new URLSearchParams()
     params.append('client_id', clientId)
@@ -108,11 +156,19 @@ export async function createBookingEventViaOAuth(env: any, params: OAuthCreatePa
   try {
     // For OAuth user credentials (personal Gmail), attendees ARE allowed and Meet IS allowed on group calendars
     // Unlike SA, OAuth acts as real user metagtmtest1@gmail.com
+    const cancelUrl = `${siteUrl}/api/cancel/${params.cancelToken}`
+    const initialDesc = buildOAuthDescription({
+      purpose: params.purpose,
+      email: params.email,
+      phone: params.phone,
+      cancelUrl,
+      driveLink: params.driveFolderUrl,
+    })
     const eventPayload = {
       summary: `Meeting with ${params.firstName} ${params.lastName}`,
-      description: `${params.purpose || 'Intro call'}\n\nContact: ${params.email} ${params.phone || ''}\n\nCancel: ${siteUrl}/api/cancel/${params.cancelToken}`,
-      start: { dateTime: params.slot.start, timeZone: env?.TIMEZONE || TIMEZONE },
-      end: { dateTime: params.slot.end, timeZone: env?.TIMEZONE || TIMEZONE },
+      description: initialDesc,
+      start: { dateTime: params.slot.start, timeZone: params.timeZone || env?.TIMEZONE || TIMEZONE },
+      end: { dateTime: params.slot.end, timeZone: params.timeZone || env?.TIMEZONE || TIMEZONE },
       attendees: [{ email: params.email, displayName: `${params.firstName} ${params.lastName}` }],
       conferenceData: {
         createRequest: {
@@ -234,3 +290,4 @@ export async function createBookingEventViaOAuth(env: any, params: OAuthCreatePa
     }
   }
 }
+

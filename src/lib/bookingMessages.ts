@@ -5,18 +5,18 @@
  * unverified sending domain ended with the visitor reading
  * `Resend failed 422 {"statusCode":422,…"Please use our testing email address instead of
  * domains like example.com. See our documentation…"}` — the email provider talking to a
- * developer, on a prospective client's screen — and the calendar case told them to go
- * check `/api/debug/diag`. Neither is the visitor's problem, and both buried the one
- * fact that matters: the meeting is booked.
+ * developer, on a prospective client's screen.
  *
- * The raw errors still reach the developer via `debug()`, which is DEV-only.
+ * Double opt-in note: pending_bookings is created BEFORE email. If sendPendingConfirmEmail
+ * fails, nothing is booked yet (no bookings row until token click) — so detail must NOT say
+ * "Your meeting is booked". See P0 #1.
  */
 
 export const BOOKING_MESSAGES = {
-  /** The meeting exists; only the confirmation email failed. */
+  /** Pending exists but confirmation email failed — nothing booked yet (double opt-in). */
   emailNotSent: {
     heading: 'Confirmation email couldn’t be sent',
-    detail: 'Your meeting is booked — save the details below so you have them.',
+    detail: 'Your time isn’t booked yet — we couldn’t deliver the confirmation email. Check spam for “Confirm your meeting”, wait a minute and try again, or contact us.',
   },
   /** The meeting exists; the video link is a stand-in until Calendar is connected. */
   placeholderMeetLink: {
